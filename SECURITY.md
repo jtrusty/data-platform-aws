@@ -1,8 +1,8 @@
 # Security Model
 
 > Status: state, GitHub OIDC bootstrap, deployment boundaries, and Identity
-> Center access are applied and verified in AWS. Runtime roles and platform
-> services remain planned.
+> Center access are applied and verified in AWS. The first S3, SQS, DynamoDB,
+> and runtime-IAM foundation is implemented in Terraform but not yet applied.
 
 ## Trust boundary
 
@@ -111,24 +111,30 @@ secret values through committed variables. Engineers may retrieve only platform
 secrets for incident response. Runtime roles receive narrower source/category
 access.
 
-A small number of environment-oriented customer-managed KMS keys is preferred.
-Key administration and cryptographic use are separate. Runtime roles never
+A small number of environment-oriented customer-managed KMS keys is preferred
+when a separate cryptographic boundary is required. Terraform state uses one
+customer-managed key per account. The initial data lake instead uses
+no-additional-cost service-owned encryption: SSE-S3, SSE-SQS, DynamoDB
+AWS-owned encryption, and the Secrets Manager service key. Runtime roles never
 receive key-policy changes, disablement, or deletion operations.
 
-The initial S3 module defaults new objects to the supplied customer-managed KMS
-key with Bucket Keys. It also enforces versioning, lifecycle handling of
+The S3 module supports either SSE-S3 or a supplied customer-managed KMS key
+with Bucket Keys. It also enforces configurable versioning, lifecycle handling of
 noncurrent versions and abandoned multipart uploads, bucket-owner enforcement,
 all four Block Public Access controls, and a TLS-only bucket policy. A future
-policy can require the exact KMS key on every explicit upload if that stronger
-boundary is needed; the current default does not reject an explicitly requested
-alternative encryption mode.
+upload may omit encryption headers and use the bucket default; if it explicitly
+requests encryption, the policy rejects an algorithm or KMS key inconsistent
+with the configured bucket mode.
 
 ## Network flows
 
 Redshift Serverless will use private subnets and
 `publicly_accessible = false`. Its security group will allow TCP/5439 only from
 explicit workload security-group references, never IPv4 or IPv6 world CIDRs.
-Enhanced VPC Routing will be enabled where supported.
+Enhanced VPC Routing and an S3 gateway endpoint will serve same-Region lake
+access. Query Editor and non-VPC workloads will use the Redshift Data API, so
+the initial design needs neither a NAT gateway nor a paid Data API interface
+endpoint.
 
 Lambda remains outside the VPC unless a function needs a private resource. The
 initial private network will use S3 and DynamoDB gateway endpoints and no NAT

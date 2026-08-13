@@ -48,25 +48,15 @@ locals {
 
   data_engineer_resource_actions = [
     "athena:*",
-    "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem", "dynamodb:ConditionCheckItem",
-    "dynamodb:CreateTable", "dynamodb:DeleteItem", "dynamodb:DeleteTable", "dynamodb:Describe*",
-    "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:Scan",
-    "dynamodb:TagResource", "dynamodb:UntagResource", "dynamodb:UpdateItem", "dynamodb:UpdateTable",
-    "glue:BatchCreatePartition", "glue:BatchGet*", "glue:CreateCrawler", "glue:CreateDatabase",
-    "glue:CreateJob", "glue:CreatePartition", "glue:CreateTable", "glue:DeleteCrawler",
-    "glue:DeleteDatabase", "glue:DeleteJob", "glue:DeletePartition", "glue:DeleteTable",
-    "glue:Get*", "glue:StartCrawler", "glue:StartJobRun", "glue:StopCrawler", "glue:StopJobRun",
-    "glue:TagResource", "glue:UntagResource", "glue:UpdateCrawler", "glue:UpdateDatabase",
-    "glue:UpdateJob", "glue:UpdatePartition", "glue:UpdateTable",
+    "dynamodb:*Item*", "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:Describe*",
+    "dynamodb:Query", "dynamodb:Scan", "dynamodb:TagResource", "dynamodb:UntagResource", "dynamodb:UpdateTable",
+    "glue:*Crawler", "glue:*Database", "glue:*Job", "glue:*Partition", "glue:*Table",
+    "glue:Get*", "glue:StartJobRun", "glue:StopJobRun", "glue:TagResource", "glue:UntagResource",
     "lambda:CreateFunction", "lambda:DeleteFunction", "lambda:Get*", "lambda:PublishVersion",
     "lambda:TagResource", "lambda:UntagResource", "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
     "logs:FilterLogEvents", "logs:Get*", "logs:StartQuery", "logs:StopQuery",
-    "redshift-data:BatchExecuteStatement", "redshift-data:CancelStatement", "redshift-data:DescribeStatement",
-    "redshift-data:ExecuteStatement", "redshift-data:GetStatementResult",
-    "redshift-serverless:Get*",
-    "sqs:ChangeMessageVisibility", "sqs:CreateQueue", "sqs:DeleteMessage", "sqs:DeleteQueue",
-    "sqs:GetQueueAttributes", "sqs:GetQueueUrl", "sqs:ListDeadLetterSourceQueues", "sqs:ListQueueTags",
-    "sqs:PurgeQueue", "sqs:ReceiveMessage", "sqs:SendMessage", "sqs:TagQueue", "sqs:UntagQueue",
+    "sqs:*Message*", "sqs:CreateQueue", "sqs:DeleteQueue", "sqs:GetQueueAttributes", "sqs:GetQueueUrl",
+    "sqs:ListDeadLetterSourceQueues", "sqs:ListQueueTags", "sqs:PurgeQueue", "sqs:TagQueue", "sqs:UntagQueue",
     "states:*",
   ]
 
@@ -83,6 +73,27 @@ locals {
         Effect   = "Allow"
         Action   = local.data_engineer_resource_actions
         Resource = local.data_engineer_resource_arns[environment.prefix]
+      },
+      {
+        Sid    = "Query${replace(title(name), "-", "")}Redshift"
+        Effect = "Allow"
+        Action = [
+          "redshift-data:BatchExecuteStatement",
+          "redshift-data:ExecuteStatement",
+          "redshift-serverless:GetCredentials",
+          "redshift-serverless:GetNamespace",
+          "redshift-serverless:GetWorkgroup",
+        ]
+        Resource = [
+          "arn:aws:redshift-serverless:us-east-2:${environment.account_id}:namespace/*",
+          "arn:aws:redshift-serverless:us-east-2:${environment.account_id}:workgroup/*",
+        ]
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Platform"    = "data-platform"
+            "aws:ResourceTag/Environment" = name
+          }
+        }
       },
       {
         Sid      = "Operate${replace(title(name), "-", "")}Data"
@@ -130,6 +141,27 @@ locals {
       Resource = local.data_engineer_resource_arns[local.production_environment.prefix]
     },
     {
+      Sid    = "QueryProductionRedshift"
+      Effect = "Allow"
+      Action = [
+        "redshift-data:BatchExecuteStatement",
+        "redshift-data:ExecuteStatement",
+        "redshift-serverless:GetCredentials",
+        "redshift-serverless:GetNamespace",
+        "redshift-serverless:GetWorkgroup",
+      ]
+      Resource = [
+        "arn:aws:redshift-serverless:us-east-2:${local.production_environment.account_id}:namespace/*",
+        "arn:aws:redshift-serverless:us-east-2:${local.production_environment.account_id}:workgroup/*",
+      ]
+      Condition = {
+        StringEquals = {
+          "aws:ResourceTag/Platform"    = "data-platform"
+          "aws:ResourceTag/Environment" = "production"
+        }
+      }
+    },
+    {
       Sid    = "OperateProductionData"
       Effect = "Allow"
       Action = local.data_engineer_s3_actions
@@ -169,8 +201,49 @@ locals {
     },
   ]
 
+  protected_development_resources = [
+    {
+      Sid      = "ProtectDevelopmentMetadata"
+      Effect   = "Deny"
+      Action   = ["dynamodb:DeleteTable"]
+      Resource = "arn:aws:dynamodb:us-east-2:${local.workload_accounts.development}:table/data-platform-development-metadata"
+    },
+    {
+      Sid    = "ProtectDevelopmentBaselineQueues"
+      Effect = "Deny"
+      Action = ["sqs:DeleteQueue", "sqs:PurgeQueue"]
+      Resource = [
+        "arn:aws:sqs:us-east-2:${local.workload_accounts.development}:data-platform-development-ingest",
+        "arn:aws:sqs:us-east-2:${local.workload_accounts.development}:data-platform-development-ingest-dlq",
+        "arn:aws:sqs:us-east-2:${local.workload_accounts.development}:data-platform-development-bronze-complete",
+        "arn:aws:sqs:us-east-2:${local.workload_accounts.development}:data-platform-development-bronze-complete-dlq",
+      ]
+    },
+  ]
+
+  protected_production_resources = [
+    {
+      Sid      = "ProtectProductionMetadata"
+      Effect   = "Deny"
+      Action   = ["dynamodb:DeleteTable"]
+      Resource = "arn:aws:dynamodb:us-east-2:${local.workload_accounts.production}:table/data-platform-production-metadata"
+    },
+    {
+      Sid    = "ProtectProductionBaselineQueues"
+      Effect = "Deny"
+      Action = ["sqs:DeleteQueue", "sqs:PurgeQueue"]
+      Resource = [
+        "arn:aws:sqs:us-east-2:${local.workload_accounts.production}:data-platform-production-ingest",
+        "arn:aws:sqs:us-east-2:${local.workload_accounts.production}:data-platform-production-ingest-dlq",
+        "arn:aws:sqs:us-east-2:${local.workload_accounts.production}:data-platform-production-bronze-complete",
+        "arn:aws:sqs:us-east-2:${local.workload_accounts.production}:data-platform-production-bronze-complete-dlq",
+      ]
+    },
+  ]
+
   data_engineer_resource_arns = {
     for environment in concat(values(local.nonprod_environments), [local.production_environment]) : environment.prefix => [
+      "arn:aws:athena:us-east-2:${environment.account_id}:datacatalog/AwsDataCatalog",
       "arn:aws:athena:us-east-2:${environment.account_id}:workgroup/${environment.prefix}-*",
       "arn:aws:dynamodb:us-east-2:${environment.account_id}:table/${environment.prefix}-*",
       "arn:aws:dynamodb:us-east-2:${environment.account_id}:table/${environment.prefix}-*/index/*",
@@ -182,8 +255,6 @@ locals {
       "arn:aws:lambda:us-east-2:${environment.account_id}:function:${environment.prefix}-*",
       "arn:aws:logs:us-east-2:${environment.account_id}:log-group:/aws-glue/*",
       "arn:aws:logs:us-east-2:${environment.account_id}:log-group:/aws/lambda/${environment.prefix}-*:*",
-      "arn:aws:redshift-serverless:us-east-2:${environment.account_id}:workgroup/${environment.prefix}-*",
-      "arn:aws:redshift-serverless:us-east-2:${environment.account_id}:namespace/${environment.prefix}-*",
       "arn:aws:sqs:us-east-2:${environment.account_id}:${environment.prefix}-*",
       "arn:aws:states:us-east-2:${environment.account_id}:execution:${environment.prefix}-*:*",
       "arn:aws:states:us-east-2:${environment.account_id}:stateMachine:${environment.prefix}-*",
@@ -195,7 +266,9 @@ locals {
     Statement = concat(
       [{ Sid = "DiscoverPlatformResources", Effect = "Allow", Action = local.data_engineer_discovery_actions, Resource = "*" }],
       local.nonprod_environment_statements,
+      [local.read_owned_redshift_statements],
       local.passrole_statements_nonprod,
+      local.protected_development_resources,
     )
   })
 
@@ -204,9 +277,27 @@ locals {
     Statement = concat(
       [{ Sid = "DiscoverPlatformResources", Effect = "Allow", Action = local.data_engineer_discovery_actions, Resource = "*" }],
       local.production_environment_statements,
+      [local.read_owned_redshift_statements],
       local.passrole_statements_production,
+      local.protected_production_resources,
     )
   })
+
+  read_owned_redshift_statements = {
+    Sid    = "ReadOwnedRedshiftStatements"
+    Effect = "Allow"
+    Action = [
+      "redshift-data:CancelStatement",
+      "redshift-data:DescribeStatement",
+      "redshift-data:GetStatementResult",
+    ]
+    Resource = "*"
+    Condition = {
+      StringEquals = {
+        "redshift-data:statement-owner-iam-userid" = "$${aws:userid}"
+      }
+    }
+  }
 
   passrole_statements_nonprod = [
     {

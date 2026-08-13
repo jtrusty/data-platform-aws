@@ -30,3 +30,108 @@ variable "owner" {
     error_message = "owner must not be empty."
   }
 }
+
+variable "force_destroy_buckets" {
+  description = "Allow Terraform to empty platform buckets during teardown."
+  type        = bool
+  default     = false
+}
+
+variable "landing_expiration_days" {
+  description = "Days to retain temporary landing objects."
+  type        = number
+  default     = 14
+}
+
+variable "athena_results_expiration_days" {
+  description = "Days to retain reproducible Athena query results."
+  type        = number
+  default     = 14
+}
+
+variable "artifact_expiration_days" {
+  description = "Days to retain current deployment artifacts."
+  type        = number
+}
+
+variable "versioned_bucket_purposes" {
+  description = "Bucket purposes that retain overwritten object versions."
+  type        = set(string)
+}
+
+variable "queue_visibility_timeout_seconds" {
+  description = "Seconds a received message remains hidden."
+  type        = number
+}
+
+variable "queue_message_retention_seconds" {
+  description = "Work queue message retention in seconds."
+  type        = number
+}
+
+variable "dlq_message_retention_seconds" {
+  description = "Dead-letter queue message retention in seconds."
+  type        = number
+}
+
+variable "queue_max_receive_count" {
+  description = "Receives before a message moves to its DLQ."
+  type        = number
+}
+
+variable "secret_recovery_window_days" {
+  description = "Secrets Manager deletion recovery window."
+  type        = number
+  default     = 7
+}
+
+variable "noncurrent_version_expiration_days" {
+  description = "Days to retain noncurrent S3 object versions."
+  type        = number
+  default     = 30
+
+  validation {
+    condition     = var.noncurrent_version_expiration_days >= 7 && var.noncurrent_version_expiration_days <= 3650
+    error_message = "noncurrent_version_expiration_days must be between 7 and 3650."
+  }
+}
+
+variable "metadata_read_capacity" {
+  description = "Provisioned DynamoDB metadata read capacity units."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.metadata_read_capacity >= 1 && floor(var.metadata_read_capacity) == var.metadata_read_capacity
+    error_message = "metadata_read_capacity must be a positive whole number."
+  }
+}
+
+variable "metadata_write_capacity" {
+  description = "Provisioned DynamoDB metadata write capacity units."
+  type        = number
+  default     = 1
+
+  validation {
+    condition     = var.metadata_write_capacity >= 1 && floor(var.metadata_write_capacity) == var.metadata_write_capacity
+    error_message = "metadata_write_capacity must be a positive whole number."
+  }
+}
+
+variable "metadata_point_in_time_recovery" {
+  description = "Enable DynamoDB point-in-time recovery."
+  type        = bool
+  default     = false
+}
+
+variable "metadata_deletion_protection" {
+  description = "Enable DynamoDB deletion protection."
+  type        = bool
+  default     = false
+}
+
+variable "secret_names" {
+  description = "Relative data-platform secret container paths; values are populated outside Terraform."
+  type        = set(string)
+  default     = []
+}

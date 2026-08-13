@@ -61,6 +61,16 @@ run "secure_bucket_defaults" {
   }
 
   assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement :
+      statement.Sid == "DenyExplicitMissingKmsKey" &&
+      statement.Condition.StringEquals["s3:x-amz-server-side-encryption"] == "aws:kms" &&
+      statement.Condition.Null["s3:x-amz-server-side-encryption-aws-kms-key-id"] == "true"
+    ])
+    error_message = "An explicit aws:kms upload must name the bucket's configured customer-managed key."
+  }
+
+  assert {
     condition = (
       jsondecode(aws_s3_bucket_policy.this.policy).Statement[0].Effect == "Deny" &&
       jsondecode(aws_s3_bucket_policy.this.policy).Statement[0].Principal == "*" &&
@@ -102,4 +112,28 @@ run "reject_unbounded_lifecycle" {
   }
 
   expect_failures = [var.noncurrent_expiration]
+}
+
+run "aws_managed_encryption_avoids_a_monthly_kms_key" {
+  command = plan
+
+  variables {
+    kms_key_arn = null
+  }
+
+  assert {
+    condition     = one(one(aws_s3_bucket_server_side_encryption_configuration.this.rule).apply_server_side_encryption_by_default).sse_algorithm == "AES256"
+    error_message = "Buckets must support SSE-S3 as the no-additional-cost encryption default."
+  }
+
+  assert {
+    condition = anytrue([
+      for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement :
+      statement.Sid == "DenyExplicitWrongEncryption" &&
+      statement.Effect == "Deny" &&
+      statement.Condition.StringNotEquals["s3:x-amz-server-side-encryption"] == "AES256"
+    ])
+    error_message = "SSE-S3 buckets must reject an explicitly requested weaker or alternate encryption mode."
+  }
+
 }

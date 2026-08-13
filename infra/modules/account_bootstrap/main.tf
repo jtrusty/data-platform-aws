@@ -67,9 +67,6 @@ resource "aws_iam_policy" "runtime_boundary" {
           "logs:CreateLogGroup",
           "logs:CreateLogStream",
           "logs:PutLogEvents",
-          "redshift-data:DescribeStatement",
-          "redshift-data:ExecuteStatement",
-          "redshift-data:GetStatementResult",
           "sqs:ChangeMessageVisibility",
           "sqs:DeleteMessage",
           "sqs:GetQueueAttributes",
@@ -79,6 +76,8 @@ resource "aws_iam_policy" "runtime_boundary" {
         ]
         Resource = [
           "arn:aws:athena:us-east-2:${var.account_id}:workgroup/data-platform-${var.environment}-*",
+          "arn:aws:athena:us-east-2:${var.account_id}:datacatalog/AwsDataCatalog",
+          "arn:aws:athena:us-east-2:${var.account_id}:datacatalog/data-platform-${var.environment}*",
           "arn:aws:dynamodb:us-east-2:${var.account_id}:table/data-platform-${var.environment}-*",
           "arn:aws:dynamodb:us-east-2:${var.account_id}:table/data-platform-${var.environment}-*/index/*",
           "arn:aws:glue:us-east-2:${var.account_id}:catalog",
@@ -88,15 +87,43 @@ resource "aws_iam_policy" "runtime_boundary" {
           "arn:aws:lambda:us-east-2:${var.account_id}:function:data-platform-${var.environment}-*",
           "arn:aws:logs:us-east-2:${var.account_id}:log-group:/aws-glue/*",
           "arn:aws:logs:us-east-2:${var.account_id}:log-group:/aws/lambda/data-platform-${var.environment}-*:*",
-          "arn:aws:redshift-serverless:us-east-2:${var.account_id}:namespace/data-platform-${var.environment}-*",
-          "arn:aws:redshift-serverless:us-east-2:${var.account_id}:workgroup/data-platform-${var.environment}-*",
           "arn:aws:sqs:us-east-2:${var.account_id}:data-platform-${var.environment}-*",
         ]
       },
       {
+        Sid      = "StartPlatformRedshiftStatements"
+        Effect   = "Allow"
+        Action   = ["redshift-data:BatchExecuteStatement", "redshift-data:ExecuteStatement"]
+        Resource = "arn:aws:redshift-serverless:us-east-2:${var.account_id}:workgroup/*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Platform"    = "data-platform"
+            "aws:ResourceTag/Environment" = var.environment
+          }
+        }
+      },
+      {
+        Sid      = "ReadPlatformRedshiftStatements"
+        Effect   = "Allow"
+        Action   = ["redshift-data:CancelStatement", "redshift-data:DescribeStatement", "redshift-data:GetStatementResult"]
+        Resource = "*"
+      },
+      {
+        Sid      = "GetPlatformRedshiftCredentials"
+        Effect   = "Allow"
+        Action   = ["redshift-serverless:GetCredentials"]
+        Resource = "arn:aws:redshift-serverless:us-east-2:${var.account_id}:workgroup/*"
+        Condition = {
+          StringEquals = {
+            "aws:ResourceTag/Platform"    = "data-platform"
+            "aws:ResourceTag/Environment" = var.environment
+          }
+        }
+      },
+      {
         Sid    = "PlatformRuntimeData"
         Effect = "Allow"
-        Action = ["s3:AbortMultipartUpload", "s3:GetObject*", "s3:ListBucket", "s3:PutObject*"]
+        Action = ["s3:AbortMultipartUpload", "s3:GetBucketLocation", "s3:GetObject", "s3:GetObjectVersion", "s3:ListBucket", "s3:PutObject"]
         Resource = [
           "arn:aws:s3:::data-platform-${var.environment}-*",
           "arn:aws:s3:::data-platform-${var.environment}-*/*",
@@ -266,6 +293,7 @@ resource "aws_iam_role_policy" "terraform_plan" {
         ]
         Resource = [
           "arn:aws:athena:us-east-2:${var.account_id}:workgroup/data-platform-production-*",
+          "arn:aws:athena:us-east-2:${var.account_id}:datacatalog/AwsDataCatalog",
           "arn:aws:dynamodb:us-east-2:${var.account_id}:table/data-platform-production-*",
           "arn:aws:dynamodb:us-east-2:${var.account_id}:table/data-platform-production-*/index/*",
           "arn:aws:glue:us-east-2:${var.account_id}:catalog",

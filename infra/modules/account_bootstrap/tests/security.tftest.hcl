@@ -89,6 +89,11 @@ run "exact_github_trust" {
       strcontains(aws_iam_policy.runtime_boundary.policy, "secret:data-platform/sandbox/*"),
       strcontains(aws_iam_policy.runtime_boundary.policy, "dynamodb:us-east-2:555044956444:table/data-platform-sandbox-*"),
       strcontains(aws_iam_policy.runtime_boundary.policy, "sqs:us-east-2:555044956444:data-platform-sandbox-*"),
+      strcontains(aws_iam_policy.runtime_boundary.policy, "redshift-serverless:us-east-2:555044956444:workgroup/*"),
+      strcontains(aws_iam_policy.runtime_boundary.policy, "redshift-data:CancelStatement"),
+      strcontains(aws_iam_policy.runtime_boundary.policy, "s3:GetBucketLocation"),
+      strcontains(aws_iam_policy.runtime_boundary.policy, "athena:us-east-2:555044956444:datacatalog/data-platform-sandbox"),
+      strcontains(aws_iam_policy.runtime_boundary.policy, "athena:us-east-2:555044956444:datacatalog/AwsDataCatalog"),
     ])
     error_message = "The runtime boundary must scope platform data and explicitly deny all state data and state KMS access."
   }
