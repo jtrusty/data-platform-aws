@@ -11,6 +11,9 @@ infra/bootstrap/*/backend.tf
 # Local variable and backend files may contain account-specific values
 *.tfvars
 *.tfvars.json
+!infra/environments/sandbox/foundation.auto.tfvars
+!infra/environments/development/foundation.auto.tfvars
+!infra/environments/production/foundation.auto.tfvars
 *.hcl
 !.tflint.hcl
 !*.hcl.example

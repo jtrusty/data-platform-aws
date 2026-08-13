@@ -108,9 +108,45 @@ run "data_engineer_has_no_admin_escape" {
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "dynamodb:CreateTable"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "sqs:CreateQueue"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "athena:*"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "athena:us-east-2:555044956444:datacatalog/AwsDataCatalog"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "states:*"),
     ])
     error_message = "DataEngineer must have platform-scoped resources, data-key use, state-key denial, and normal resource lifecycle actions."
+  }
+
+  assert {
+    condition = alltrue([
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "sqs:*Message*"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectDevelopmentBaselineQueues"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "ProtectProductionBaselineQueues"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "ProtectProductionMetadata"),
+    ])
+    error_message = "DataEngineer must be able to replay DLQs without being able to purge or delete Terraform baseline queues and metadata."
+  }
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy),
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy),
+        ] : (
+        anytrue([
+          for statement in policy.Statement :
+          contains(try(tolist(statement.Action), [statement.Action]), "redshift-data:ExecuteStatement") &&
+          alltrue([for resource in try(tolist(statement.Resource), [statement.Resource]) :
+            endswith(resource, ":workgroup/*") || endswith(resource, ":namespace/*")
+          ]) &&
+          can(statement.Condition.StringEquals["aws:ResourceTag/Platform"])
+        ]) &&
+        anytrue([
+          for statement in policy.Statement :
+          contains(try(tolist(statement.Action), [statement.Action]), "redshift-data:GetStatementResult") &&
+          statement.Resource == "*" &&
+          statement.Condition.StringEquals["redshift-data:statement-owner-iam-userid"] == "$${aws:userid}"
+        ])
+      )
+    ])
+    error_message = "DataEngineer Data API access must target tagged Serverless IDs and restrict statement results to the caller."
   }
 
   assert {

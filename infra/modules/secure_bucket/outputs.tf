@@ -1,9 +1,9 @@
 output "arn" {
   description = "ARN of the bucket."
-  value       = aws_s3_bucket.this.arn
+  value       = "arn:aws:s3:::${var.bucket_name}"
 }
 
 output "id" {
   description = "Name of the bucket."
-  value       = aws_s3_bucket.this.id
+  value       = var.bucket_name
 }

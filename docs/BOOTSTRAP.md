@@ -322,6 +322,36 @@ to development for the exact tagged commit. The `production` Environment then
 provides the human approval gate. Environment concurrency groups prevent two
 applies from racing against the same state.
 
+### Apply bootstrap contracts before workload changes
+
+Routine deployment roles cannot change their own permissions boundaries or
+Identity Center access. A pull request that changes
+`infra/modules/account_bootstrap` or `infra/modules/identity_center_access`
+therefore has an administrator-owned prerequisite:
+
+1. Apply the organization root with `organization-admin` when Identity Center
+   policy content changes.
+2. Apply each target account's bootstrap root with its `PlatformAdmin` profile
+   before that account's environment root deploys the dependent resources.
+3. Do not merge a dependent workload change to `main` until the development
+   bootstrap prerequisite is live; the merge immediately deploys development.
+4. Apply the production bootstrap prerequisite before creating the release
+   tag. Production still requires the protected GitHub Environment approval.
+
+For the foundation contract, the safe order is:
+
+```text
+organization access -> sandbox bootstrap -> sandbox workload
+                    -> development bootstrap -> merge -> development workload
+                    -> production bootstrap -> release tag -> production workload
+```
+
+Use `terraform plan -out` with the matching SSO profile, review the saved plan,
+and apply that exact plan locally. Plan files can contain sensitive values; keep
+them outside the repository and never upload them to public workflow artifacts.
+This manual step is intentionally limited to administrator-owned IAM contracts,
+not routine platform or data development.
+
 Local SSO sessions were used for the one-time bootstrap because an OIDC role
 cannot create itself or its state backend. Routine platform deployment now runs
 in GitHub Actions. A platform administrator may still run Terraform locally for

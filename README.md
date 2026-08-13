@@ -22,6 +22,11 @@ in all four accounts. Runtime IAM, networking, messaging, metadata, analytics,
 and Redshift modules are the next increments. See
 [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) for the dated deployment record.
 
+The first data-foundation increment is under development with cheap-by-default
+S3, SQS, DynamoDB, and runtime IAM. Its capacity, retention, Free Tier
+assumptions, and planned Redshift networking are documented in
+[docs/COSTS.md](docs/COSTS.md).
+
 ## Local setup
 
 Install [mise](https://mise.jdx.dev/), then run:
@@ -107,6 +112,11 @@ administration are planned account-governance work, not part of this milestone.
 
 Organization/Identity Center changes use a separate, manually approved OrgAdmin
 Terraform root. Routine GitHub Actions receives no management-account access.
+When a workload change depends on a new IAM boundary, the administrator applies
+the organization and target-account bootstrap plans first. In particular, the
+development prerequisite must be live before merge because `main` deploys
+development automatically. The exact ordering is documented in the
+[bootstrap contract runbook](docs/BOOTSTRAP.md#apply-bootstrap-contracts-before-workload-changes).
 
 The bootstrap stack defines one secure state bucket and one GitHub-OIDC
 deployment role inside each workload account. Workload state remains in its own

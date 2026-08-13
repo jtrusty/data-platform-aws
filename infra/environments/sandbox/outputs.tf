@@ -22,3 +22,15 @@ output "vpc_cidr" {
   description = "Dedicated environment VPC CIDR."
   value       = local.vpc_cidr
 }
+
+output "foundation" {
+  description = "Identifiers for the sandbox data foundation."
+  value = {
+    bucket_names           = module.data_foundation.bucket_names
+    dead_letter_queue_arns = module.data_foundation.dead_letter_queue_arns
+    metadata_table_name    = module.data_foundation.metadata_table_name
+    runtime_role_arns      = module.data_foundation.runtime_role_arns
+    secret_arns            = module.data_foundation.secret_arns
+    work_queue_arns        = module.data_foundation.queue_arns
+  }
+}

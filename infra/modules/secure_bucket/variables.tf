@@ -16,16 +16,24 @@ variable "bucket_name" {
 }
 
 variable "kms_key_arn" {
-  description = "ARN of the platform KMS key used for default bucket encryption."
+  description = "Optional ARN of the platform KMS key. Null uses no-additional-cost SSE-S3 encryption."
   type        = string
+  default     = null
+  nullable    = true
 
   validation {
-    condition = (
+    condition = var.kms_key_arn == null ? true : (
       can(regex("^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$", var.kms_key_arn)) ||
       can(regex("^arn:[^:]+:kms:[^:]+:[0-9]{12}:key/mrk-[0-9a-fA-F]{32}$", var.kms_key_arn))
     )
-    error_message = "kms_key_arn must be a canonical single-Region or multi-Region KMS key ARN, not an alias or unrestricted value."
+    error_message = "kms_key_arn must be null or a canonical single-Region or multi-Region KMS key ARN, not an alias or unrestricted value."
   }
+}
+
+variable "versioning_enabled" {
+  description = "Enable object versioning where recovery needs justify the additional storage."
+  type        = bool
+  default     = true
 }
 
 variable "force_destroy" {
@@ -42,6 +50,18 @@ variable "noncurrent_expiration" {
   validation {
     condition     = var.noncurrent_expiration >= 7 && var.noncurrent_expiration <= 3650
     error_message = "noncurrent_expiration must be between 7 days and 10 years."
+  }
+}
+
+variable "current_expiration" {
+  description = "Optional number of days after which current objects expire. Null retains current objects."
+  type        = number
+  default     = null
+  nullable    = true
+
+  validation {
+    condition     = var.current_expiration == null ? true : var.current_expiration >= 1 && var.current_expiration <= 3650
+    error_message = "current_expiration must be null or between 1 day and 10 years."
   }
 }
 
