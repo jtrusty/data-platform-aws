@@ -2,7 +2,8 @@
 
 > Status: state, GitHub OIDC bootstrap, deployment boundaries, and Identity
 > Center access are applied and verified in AWS. The first S3, SQS, DynamoDB,
-> and runtime-IAM foundation is implemented in Terraform but not yet applied.
+> and runtime-IAM foundation is live and drift-free in sandbox and development;
+> production remains intentionally undeployed.
 
 ## Trust boundary
 

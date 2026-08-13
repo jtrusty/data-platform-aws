@@ -553,6 +553,57 @@ deployment roles, and the read-only production plan role. The temporary
 backend migration were deleted after their versioned, encrypted S3 copies were
 verified.
 
+## Data-foundation deployment record
+
+On 2026-08-13, pull request
+[`#1`](https://github.com/jtrusty/data-platform-aws/pull/1) promoted commit
+`e9f94d0` after the credential-free checks and OIDC production plan passed.
+The administrator-owned prerequisites were applied first from saved plans:
+
+```bash
+AWS_PROFILE=organization-admin \
+  terraform -chdir=infra/organization apply \
+  /tmp/data-platform-organization-access.tfplan
+
+AWS_PROFILE=sandbox-admin \
+  terraform -chdir=infra/bootstrap/sandbox apply \
+  /tmp/data-platform-sandbox-bootstrap.tfplan
+
+AWS_PROFILE=development-admin \
+  terraform -chdir=infra/bootstrap/development apply \
+  /tmp/data-platform-development-bootstrap.tfplan
+```
+
+The organization plan changed two DataEngineer permission-set policies. Each
+workload bootstrap plan changed one runtime permissions boundary. None created
+or destroyed resources. Sandbox was then deployed from the feature commit, and
+merging the PR triggered development from the same reviewed content:
+
+```bash
+gh workflow run deploy.yml \
+  --ref feat/low-cost-data-foundation \
+  -f target=sandbox
+
+gh pr merge 1 --squash \
+  --subject "feat: add low-cost data foundation"
+```
+
+Each workload apply created 54 resources: five secure buckets, two standard
+queues and two DLQs, one metadata table, four runtime roles and policies, and
+their security/lifecycle configuration. Post-deploy plans returned `No changes`
+for both environments. Direct sandbox inspection additionally verified:
+
+- all five buckets block public access, use SSE-S3, and deny non-TLS requests;
+- all four queues use SSE-SQS, deny non-TLS requests, and have paired redrive;
+- DynamoDB is active, encrypted, and provisioned at 1 RCU/1 WCU; and
+- all four runtime roles use the bootstrap boundary and contain no IAM mutation
+  or role-chaining permission.
+
+Production was not applied. Before creating its first `v*` release tag, apply
+the production bootstrap prerequisite from a fresh reviewed plan. The tag then
+uses the read-only production plan, successful-development proof, and protected
+`production` Environment approval before applying.
+
 ## Official AWS references
 
 - [Organization instances of IAM Identity Center](https://docs.aws.amazon.com/singlesignon/latest/userguide/organization-instances-identity-center.html)
