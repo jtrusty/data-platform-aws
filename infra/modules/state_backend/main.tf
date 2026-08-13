@@ -112,17 +112,19 @@ resource "aws_s3_bucket_policy" "this" {
         Effect    = "Deny"
         Principal = "*"
         Action    = "s3:PutObject"
-        Resource  = "${local.bucket_arn}/*"
+        # Terraform's native S3 lockfile upload does not send SSE headers.
+        # Lockfiles remain KMS-encrypted by the enforced bucket default.
+        NotResource = "${local.bucket_arn}/*.tflock"
         Condition = {
           StringNotEquals = { "s3:x-amz-server-side-encryption" = "aws:kms" }
         }
       },
       {
-        Sid       = "DenyWrongStateKey"
-        Effect    = "Deny"
-        Principal = "*"
-        Action    = "s3:PutObject"
-        Resource  = "${local.bucket_arn}/*"
+        Sid         = "DenyWrongStateKey"
+        Effect      = "Deny"
+        Principal   = "*"
+        Action      = "s3:PutObject"
+        NotResource = "${local.bucket_arn}/*.tflock"
         Condition = {
           StringNotEquals = { "s3:x-amz-server-side-encryption-aws-kms-key-id" = local.kms_alias_arn }
         }

@@ -146,6 +146,7 @@ cp infra/bootstrap/management/backend.tf.example \
   infra/bootstrap/management/backend.tf
 terraform -chdir=infra/bootstrap/management init \
   -migrate-state \
+  -force-copy \
   -backend-config=backend.hcl.example
 terraform -chdir=infra/bootstrap/management state list
 ```
@@ -153,6 +154,9 @@ terraform -chdir=infra/bootstrap/management state list
 The committed bootstrap root intentionally has no backend declaration. The
 gitignored `backend.tf` is activated only after the bucket exists; otherwise
 Terraform cannot initialize the S3 backend needed to create that same bucket.
+The bucket policy requires explicit KMS headers for state uploads. Terraform's
+native `.tflock` uploads are the narrow exception because they do not include
+those headers; bucket-default KMS encryption still encrypts every lock object.
 
 The management bucket stores only management bootstrap and organization access
 state. It never stores workload state and routine GitHub CI cannot access it.
@@ -225,6 +229,7 @@ cp infra/bootstrap/sandbox/backend.tf.example \
   infra/bootstrap/sandbox/backend.tf
 terraform -chdir=infra/bootstrap/sandbox init \
   -migrate-state \
+  -force-copy \
   -backend-config=backend.hcl.example
 terraform -chdir=infra/bootstrap/sandbox state list
 ```
