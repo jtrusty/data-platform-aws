@@ -18,13 +18,12 @@ This first increment establishes:
 - the target trust model in [SECURITY.md](SECURITY.md).
 
 The state, Identity Center, GitHub OIDC, and deployment-role bootstrap is live
-in all four accounts. Runtime IAM, networking, messaging, metadata, analytics,
-and Redshift modules are the next increments. See
-[docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) for the dated deployment record.
-
-The first data-foundation increment is under development with cheap-by-default
-S3, SQS, DynamoDB, and runtime IAM. Its capacity, retention, Free Tier
-assumptions, and planned Redshift networking are documented in
+in all four accounts. The cheap-by-default S3, SQS, DynamoDB, and runtime-IAM
+foundation is also live and drift-free in sandbox and development. Production
+remains intentionally undeployed until a reviewed release tag is approved.
+Networking, analytics services, and Redshift are the next increments. See the
+dated deployment record in [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) and the
+capacity, retention, Free Tier, and planned Redshift choices in
 [docs/COSTS.md](docs/COSTS.md).
 
 ## Local setup
