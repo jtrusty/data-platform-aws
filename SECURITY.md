@@ -158,6 +158,35 @@ State buckets use `jtrusty-dp-tfstate-*`, outside the engineer-managed
 DataEngineer and runtime policies because state and plan files can contain
 sensitive values.
 
+## Public repository and deployment identity
+
+This repository is intentionally public. AWS account IDs, role ARNs, Identity
+Center identifiers, region names, bucket names, CIDRs, and IAM policy documents
+are identifiers or architecture metadata, not authentication credentials. Their
+disclosure is accepted, but policies must remain secure even when an attacker
+knows every identifier and policy statement.
+
+No AWS access keys are stored in GitHub. GitHub Actions exchanges an ephemeral
+OIDC token for temporary AWS role credentials. Each trust policy requires the
+exact immutable GitHub repository identity and the expected GitHub environment;
+fork pull requests cannot request an AWS deployment role. Production planning
+uses a separate read-only role, while production apply requires the protected
+`production` environment and a version tag whose exact commit has already
+deployed successfully to development.
+
+Repository controls include GitHub secret scanning, push protection, pinned
+action revisions, CODEOWNERS, protected `main`, required Terraform checks, and
+blocked force-pushes and branch deletion. With only one permanent repository
+administrator, pull requests require passing checks but not an independent
+approval. Adding a second trusted maintainer should be followed by requiring one
+CODEOWNER approval and preventing self-review for production.
+
+Terraform state, plan files, Identity Center SSO caches, local AWS configuration,
+and `.env` files are ignored and must never be committed. Terraform may create
+secret containers, but secret values are populated out of band so they do not
+enter source, plans, state, or public workflow logs. Treat workflow logs as
+public and avoid nonsensitive outputs that reveal more architecture than needed.
+
 ## Known risks and accepted tradeoffs
 
 - An engineer who can change workload code can exercise that workload role's

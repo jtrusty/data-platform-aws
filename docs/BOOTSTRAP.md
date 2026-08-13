@@ -284,6 +284,56 @@ GitHub reports the prefix
 AWS trust policies. The deployment workflow uses short-lived OIDC sessions and
 verifies the resulting AWS account before every plan or apply.
 
+## How GitHub Actions deploys
+
+GitHub authenticates the workflow identity to AWS; AWS remains the authorization
+authority:
+
+```text
+GitHub workflow
+  -> GitHub signs an OIDC token for the immutable repository + environment
+  -> AWS validates the token issuer, audience, and subject claims
+  -> the IAM role trust policy accepts or denies sts:AssumeRoleWithWebIdentity
+  -> AWS STS returns temporary role credentials
+  -> the workflow verifies the returned AWS account ID
+  -> Terraform reads that account's remote state, plans, and optionally applies
+```
+
+Copying the workflow into another repository does not grant access. A fork or
+unrelated repository cannot produce a token containing the trusted immutable
+repository identity. Selecting a different GitHub Environment also changes the
+token subject and fails the role trust policy. After assumption, the role's
+permissions boundary and IAM policies determine which AWS actions are allowed;
+the token does not provide administrator access by itself.
+
+The workflow jobs have intentionally different authority:
+
+| Trigger | GitHub Environment | AWS authority | Result |
+| --- | --- | --- | --- |
+| Pull request | None | None | Format, validate, test, lint, and scan |
+| Same-repository pull request | `production-plan` | Read-only production plan role | Production plan only |
+| Manual `sandbox` dispatch | `sandbox` | Sandbox deployment role | Sandbox plan and apply |
+| Push to `main` | `development` | Development deployment role | Development plan and apply |
+| Manual `production-plan` dispatch | `production-plan` | Read-only production plan role | Production plan only |
+| Push of a `v*` tag | `production-plan`, then `production` | Read-only plan, then production deployment role | Verified plan and approved apply |
+
+The production apply job additionally requires a successful GitHub deployment
+to development for the exact tagged commit. The `production` Environment then
+provides the human approval gate. Environment concurrency groups prevent two
+applies from racing against the same state.
+
+Local SSO sessions were used for the one-time bootstrap because an OIDC role
+cannot create itself or its state backend. Routine platform deployment now runs
+in GitHub Actions. A platform administrator may still run Terraform locally for
+bootstrap maintenance or recovery, using an Identity Center session rather than
+a static access key.
+
+Terraform state never passes through the management account. Sandbox,
+development, and production each read and write a separate encrypted,
+versioned state object in their own account. Workflow logs are public, so plans
+must not be uploaded as public artifacts and secret values must never be
+supplied through Terraform.
+
 ## Root-user protection
 
 An email alias only changes message delivery. It does not share root security

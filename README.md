@@ -120,7 +120,9 @@ namespace, the state KMS keys, OIDC providers, and Terraform deployment roles.
 
 ### Promotion workflow
 
-- Pull requests run tests, scanners, and plans but never apply production.
+- Pull requests run tests and scanners. Same-repository pull requests also use
+  the read-only production role to produce a plan; fork pull requests receive
+  no AWS credentials.
 - A feature commit may be manually deployed to the shared sandbox. Sandbox
   deployments are serialized and can be destroyed deliberately.
 - Merging to protected `main` automatically applies that exact commit to development.
@@ -131,6 +133,18 @@ namespace, the state KMS keys, OIDC providers, and Terraform deployment roles.
 - Each environment has a deployment concurrency group so two applies cannot race.
 - Rollback redeploys a previously tested Git commit and artifact digest;
   Terraform state restoration is reserved for state corruption.
+
+GitHub Actions is the normal deployment operator, not merely a lint runner.
+GitHub signs an OIDC identity token describing the immutable repository and
+selected GitHub Environment. AWS validates that token against the deployment
+role's trust policy and returns short-lived credentials; Terraform then plans
+and applies directly in the target account. GitHub stores no permanent AWS
+credential, and each target account retains its own encrypted Terraform state.
+
+Local administrator sessions were needed to create this OIDC/state bootstrap.
+Future local applies are reserved for bootstrap changes and recovery; routine
+sandbox, development, and production deployments use the workflow described in
+[the bootstrap runbook](docs/BOOTSTRAP.md#how-github-actions-deploys).
 
 ## Inputs needed before AWS deployment
 
