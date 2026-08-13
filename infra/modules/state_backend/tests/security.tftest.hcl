@@ -1,5 +1,13 @@
 mock_provider "aws" {}
 
+override_resource {
+  target          = aws_kms_key.this
+  override_during = plan
+  values = {
+    arn = "arn:aws:kms:us-east-2:555044956444:key/00000000-0000-0000-0000-000000000000"
+  }
+}
+
 variables {
   account_id  = "555044956444"
   environment = "sandbox"
@@ -59,12 +67,15 @@ run "secure_state_backend" {
 
   assert {
     condition = (
-      one([for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement : statement if statement.Sid == "DenyNonKMSStateUploads"]).Condition.StringNotEquals["s3:x-amz-server-side-encryption"] == "aws:kms" &&
-      one([for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement : statement if statement.Sid == "DenyWrongStateKey"]).Condition.StringNotEquals["s3:x-amz-server-side-encryption-aws-kms-key-id"] == "arn:aws:kms:us-east-2:555044956444:alias/jtrusty-data-platform-tfstate-sandbox" &&
-      one([for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement : statement if statement.Sid == "DenyNonKMSStateUploads"]).NotResource == "arn:aws:s3:::jtrusty-dp-tfstate-sandbox-555044956444-us-east-2/*.tflock" &&
-      one([for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement : statement if statement.Sid == "DenyWrongStateKey"]).NotResource == "arn:aws:s3:::jtrusty-dp-tfstate-sandbox-555044956444-us-east-2/*.tflock"
+      one([for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement : statement if statement.Sid == "DenyExplicitNonKMSUploads"]).Condition.Null["s3:x-amz-server-side-encryption"] == "false" &&
+      one([for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement : statement if statement.Sid == "DenyExplicitNonKMSUploads"]).Condition.StringNotEquals["s3:x-amz-server-side-encryption"] == "aws:kms" &&
+      one([for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement : statement if statement.Sid == "DenyExplicitWrongKMSKey"]).Condition.Null["s3:x-amz-server-side-encryption-aws-kms-key-id"] == "false" &&
+      toset(one([for statement in jsondecode(aws_s3_bucket_policy.this.policy).Statement : statement if statement.Sid == "DenyExplicitWrongKMSKey"]).Condition.StringNotEquals["s3:x-amz-server-side-encryption-aws-kms-key-id"]) == toset([
+        "arn:aws:kms:us-east-2:555044956444:alias/jtrusty-data-platform-tfstate-sandbox",
+        aws_kms_key.this.arn,
+      ])
     )
-    error_message = "State uploads must request the exact KMS alias while lock files use enforced bucket-default KMS encryption."
+    error_message = "Bucket-default KMS must handle headerless uploads while explicit encryption requests cannot bypass the approved key."
   }
 
   assert {

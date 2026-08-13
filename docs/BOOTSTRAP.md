@@ -154,9 +154,10 @@ terraform -chdir=infra/bootstrap/management state list
 The committed bootstrap root intentionally has no backend declaration. The
 gitignored `backend.tf` is activated only after the bucket exists; otherwise
 Terraform cannot initialize the S3 backend needed to create that same bucket.
-The bucket policy requires explicit KMS headers for state uploads. Terraform's
-native `.tflock` uploads are the narrow exception because they do not include
-those headers; bucket-default KMS encryption still encrypts every lock object.
+The bucket's enforced default KMS encryption covers state and native `.tflock`
+uploads when Terraform omits encryption headers. The bucket policy separately
+denies an upload that explicitly requests a non-KMS algorithm or an unapproved
+KMS key.
 
 The management bucket stores only management bootstrap and organization access
 state. It never stores workload state and routine GitHub CI cannot access it.
