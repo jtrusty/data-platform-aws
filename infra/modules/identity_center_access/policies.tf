@@ -47,10 +47,7 @@ locals {
   ]
 
   data_engineer_resource_actions = [
-    "athena:BatchGetNamedQuery", "athena:BatchGetPreparedStatement", "athena:BatchGetQueryExecution",
-    "athena:CreateNamedQuery", "athena:CreatePreparedStatement", "athena:DeleteNamedQuery",
-    "athena:DeletePreparedStatement", "athena:Get*", "athena:StartQueryExecution",
-    "athena:StopQueryExecution", "athena:UpdateNamedQuery", "athena:UpdatePreparedStatement",
+    "athena:*",
     "dynamodb:BatchGetItem", "dynamodb:BatchWriteItem", "dynamodb:ConditionCheckItem",
     "dynamodb:CreateTable", "dynamodb:DeleteItem", "dynamodb:DeleteTable", "dynamodb:Describe*",
     "dynamodb:GetItem", "dynamodb:PutItem", "dynamodb:Query", "dynamodb:Scan",
@@ -70,9 +67,7 @@ locals {
     "sqs:ChangeMessageVisibility", "sqs:CreateQueue", "sqs:DeleteMessage", "sqs:DeleteQueue",
     "sqs:GetQueueAttributes", "sqs:GetQueueUrl", "sqs:ListDeadLetterSourceQueues", "sqs:ListQueueTags",
     "sqs:PurgeQueue", "sqs:ReceiveMessage", "sqs:SendMessage", "sqs:TagQueue", "sqs:UntagQueue",
-    "states:CreateStateMachine", "states:DeleteStateMachine", "states:Describe*",
-    "states:GetExecutionHistory", "states:StartExecution", "states:StopExecution",
-    "states:TagResource", "states:TestState", "states:UntagResource", "states:UpdateStateMachine",
+    "states:*",
   ]
 
   data_engineer_s3_actions = [

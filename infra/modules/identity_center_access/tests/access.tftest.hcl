@@ -107,16 +107,17 @@ run "data_engineer_has_no_admin_escape" {
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "DenyProductionStateKey"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "dynamodb:CreateTable"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "sqs:CreateQueue"),
-      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "states:CreateStateMachine"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "athena:*"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "states:*"),
     ])
     error_message = "DataEngineer must have platform-scoped resources, data-key use, state-key denial, and normal resource lifecycle actions."
   }
 
   assert {
     condition = (
-      length(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy) <= 32768 &&
-      length(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy) <= 32768
+      length(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy) <= 10240 &&
+      length(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy) <= 10240
     )
-    error_message = "Identity Center inline policies must fit the 32,768-byte permission-set quota."
+    error_message = "Identity Center inline policies must fit the 10,240-byte non-whitespace permission-set quota."
   }
 }
