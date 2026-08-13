@@ -37,6 +37,16 @@ done
 description = "Verify fixed environment provider and state boundaries"
 run = '''
 set -eu
+for environment in management sandbox development production; do
+  bootstrap="infra/bootstrap/$environment"
+  test -f "$bootstrap/backend.tf.example"
+  rg -F 'backend "s3" {}' "$bootstrap/backend.tf.example"
+  if rg -F 'backend "s3" {}' "$bootstrap/versions.tf"; then
+    echo "bootstrap root must start with local state: $bootstrap" >&2
+    exit 1
+  fi
+done
+
 for environment in sandbox development production; do
   root="infra/environments/$environment"
   bootstrap="infra/bootstrap/$environment"

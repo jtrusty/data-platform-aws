@@ -1,4 +1,4 @@
-bucket         = "jtrusty-data-platform-tfstate-production-991278600180-us-east-2"
+bucket         = "jtrusty-dp-tfstate-production-991278600180-us-east-2"
 key            = "data-platform/production/terraform.tfstate"
 region         = "us-east-2"
 encrypt        = true

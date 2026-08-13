@@ -1,5 +1,5 @@
 locals {
-  bucket_name   = "jtrusty-data-platform-tfstate-${var.environment}-${var.account_id}-us-east-2"
+  bucket_name   = "jtrusty-dp-tfstate-${var.environment}-${var.account_id}-us-east-2"
   bucket_arn    = "arn:aws:s3:::${local.bucket_name}"
   kms_alias_arn = "arn:aws:kms:us-east-2:${var.account_id}:alias/jtrusty-data-platform-tfstate-${var.environment}"
 }

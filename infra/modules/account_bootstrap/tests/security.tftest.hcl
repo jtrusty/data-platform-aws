@@ -4,8 +4,8 @@ override_module {
   target          = module.state_backend
   override_during = plan
   outputs = {
-    bucket_arn  = "arn:aws:s3:::jtrusty-data-platform-tfstate-sandbox-555044956444-us-east-2"
-    bucket_name = "jtrusty-data-platform-tfstate-sandbox-555044956444-us-east-2"
+    bucket_arn  = "arn:aws:s3:::jtrusty-dp-tfstate-sandbox-555044956444-us-east-2"
+    bucket_name = "jtrusty-dp-tfstate-sandbox-555044956444-us-east-2"
     kms_key_arn = "arn:aws:kms:us-east-2:555044956444:key/00000000-0000-0000-0000-000000000000"
   }
 }
@@ -84,7 +84,7 @@ run "exact_github_trust" {
     condition = alltrue([
       strcontains(aws_iam_policy.runtime_boundary.policy, "DenyTerraformStateData"),
       strcontains(aws_iam_policy.runtime_boundary.policy, "DenyTerraformStateKey"),
-      strcontains(aws_iam_policy.runtime_boundary.policy, "jtrusty-data-platform-tfstate-sandbox"),
+      strcontains(aws_iam_policy.runtime_boundary.policy, "jtrusty-dp-tfstate-sandbox"),
       strcontains(aws_iam_policy.runtime_boundary.policy, "arn:aws:s3:::data-platform-sandbox-*"),
       strcontains(aws_iam_policy.runtime_boundary.policy, "secret:data-platform/sandbox/*"),
       strcontains(aws_iam_policy.runtime_boundary.policy, "dynamodb:us-east-2:555044956444:table/data-platform-sandbox-*"),

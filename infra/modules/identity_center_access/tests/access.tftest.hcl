@@ -67,7 +67,7 @@ run "data_engineer_has_no_admin_escape" {
         ] : [
         for statement in policy.Statement : alltrue([
           for resource in try(tolist(statement.Resource), [statement.Resource]) :
-          statement.Effect != "Allow" || !strcontains(resource, "jtrusty-data-platform-tfstate")
+          statement.Effect != "Allow" || !strcontains(resource, "jtrusty-dp-tfstate")
         ])
       ]
     ]))

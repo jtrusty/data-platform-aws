@@ -1,4 +1,4 @@
-bucket       = "jtrusty-data-platform-tfstate-sandbox-555044956444-us-east-2"
+bucket       = "jtrusty-dp-tfstate-sandbox-555044956444-us-east-2"
 key          = "bootstrap/terraform.tfstate"
 region       = "us-east-2"
 encrypt      = true

@@ -153,7 +153,7 @@ read Terraform state. The management account does not store workload state or
 trust routine deployment CI; it may store only tightly controlled organization
 and bootstrap state.
 
-State buckets use `jtrusty-data-platform-tfstate-*`, outside the engineer-managed
+State buckets use `jtrusty-dp-tfstate-*`, outside the engineer-managed
 `data-platform-*` namespace. State access is explicitly excluded from
 DataEngineer and runtime policies because state and plan files can contain
 sensitive values.

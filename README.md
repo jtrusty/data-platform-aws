@@ -76,9 +76,10 @@ The management account hosts no data-platform workloads and routine deployment
 CI cannot assume a management-account role.
 
 Remote-state values are deliberately not committed. Each workload account gets
-its own versioned, encrypted state bucket. Copy that environment's
-`backend.hcl.example` and `terraform.tfvars.example`, replace placeholders, and
-pass the backend file to `terraform init`. The AWS provider also uses
+its own versioned, encrypted state bucket. Bootstrap roots begin with local
+state; after creating the bucket, copy `backend.tf.example` to the gitignored
+`backend.tf` and migrate using `backend.hcl.example`. Environment roots use the
+remote backend from their first apply. The AWS provider also uses
 `allowed_account_ids`, so credentials for the wrong account fail immediately.
 
 ### IAM and bootstrap ownership
@@ -114,7 +115,7 @@ controlled management-account bucket; it is never available to routine CI. No
 static AWS keys are used.
 
 State buckets deliberately use the separate
-`jtrusty-data-platform-tfstate-*` namespace. DataEngineer policies exclude that
+`jtrusty-dp-tfstate-*` namespace. DataEngineer policies exclude that
 namespace, the state KMS keys, OIDC providers, and Terraform deployment roles.
 
 ### Promotion workflow

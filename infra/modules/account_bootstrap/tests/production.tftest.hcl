@@ -4,8 +4,8 @@ override_module {
   target          = module.state_backend
   override_during = plan
   outputs = {
-    bucket_arn  = "arn:aws:s3:::jtrusty-data-platform-tfstate-production-991278600180-us-east-2"
-    bucket_name = "jtrusty-data-platform-tfstate-production-991278600180-us-east-2"
+    bucket_arn  = "arn:aws:s3:::jtrusty-dp-tfstate-production-991278600180-us-east-2"
+    bucket_name = "jtrusty-dp-tfstate-production-991278600180-us-east-2"
     kms_key_arn = "arn:aws:kms:us-east-2:991278600180:key/00000000-0000-0000-0000-000000000000"
   }
 }
@@ -61,8 +61,8 @@ run "production_plan_role_is_read_only" {
         contains(["ReadState", "LockState"], statement.Sid) &&
         alltrue([
           for resource in statement.Resource : contains([
-            "arn:aws:s3:::jtrusty-data-platform-tfstate-production-991278600180-us-east-2/data-platform/production/terraform.tfstate",
-            "arn:aws:s3:::jtrusty-data-platform-tfstate-production-991278600180-us-east-2/data-platform/production/terraform.tfstate.tflock",
+            "arn:aws:s3:::jtrusty-dp-tfstate-production-991278600180-us-east-2/data-platform/production/terraform.tfstate",
+            "arn:aws:s3:::jtrusty-dp-tfstate-production-991278600180-us-east-2/data-platform/production/terraform.tfstate.tflock",
           ], resource)
         ])
       )

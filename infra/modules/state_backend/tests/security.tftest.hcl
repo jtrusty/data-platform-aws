@@ -15,7 +15,7 @@ run "secure_state_backend" {
   command = plan
 
   assert {
-    condition     = aws_s3_bucket.this.bucket == "jtrusty-data-platform-tfstate-sandbox-555044956444-us-east-2"
+    condition     = aws_s3_bucket.this.bucket == "jtrusty-dp-tfstate-sandbox-555044956444-us-east-2"
     error_message = "The state bucket must use the protected, environment-specific namespace."
   }
 
@@ -68,6 +68,48 @@ run "secure_state_backend" {
   assert {
     condition     = !aws_s3_bucket.this.force_destroy
     error_message = "State buckets must not be force-destroyable."
+  }
+}
+
+run "organization_bucket_name_is_valid" {
+  command = plan
+
+  variables {
+    account_id  = "699599381258"
+    environment = "organization"
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.this.bucket) <= 63
+    error_message = "The organization state bucket must satisfy the S3 63-character limit."
+  }
+}
+
+run "development_bucket_name_is_valid" {
+  command = plan
+
+  variables {
+    account_id  = "511492912574"
+    environment = "development"
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.this.bucket) <= 63
+    error_message = "The development state bucket must satisfy the S3 63-character limit."
+  }
+}
+
+run "production_bucket_name_is_valid" {
+  command = plan
+
+  variables {
+    account_id  = "991278600180"
+    environment = "production"
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket.this.bucket) <= 63
+    error_message = "The production state bucket must satisfy the S3 63-character limit."
   }
 }
 

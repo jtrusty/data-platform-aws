@@ -5,6 +5,7 @@
 *.tfplan
 crash.log
 crash.*.log
+infra/bootstrap/*/backend.tf
 
 # Local variable and backend files may contain account-specific values
 *.tfvars
