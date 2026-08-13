@@ -1,0 +1,26 @@
+# Terraform working directories and state
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfplan
+crash.log
+crash.*.log
+
+# Local variable and backend files may contain account-specific values
+*.tfvars
+*.tfvars.json
+*.hcl
+!.tflint.hcl
+!*.hcl.example
+!.terraform.lock.hcl
+!*.tftest.hcl
+
+# Local credentials and environment files
+.env
+.env.*
+!.env.example
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store

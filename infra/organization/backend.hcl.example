@@ -1,0 +1,6 @@
+bucket       = "jtrusty-data-platform-tfstate-organization-699599381258-us-east-2"
+key          = "organization/terraform.tfstate"
+region       = "us-east-2"
+encrypt      = true
+kms_key_id   = "arn:aws:kms:us-east-2:699599381258:alias/jtrusty-data-platform-tfstate-organization"
+use_lockfile = true

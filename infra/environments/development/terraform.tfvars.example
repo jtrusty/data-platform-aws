@@ -1,0 +1,3 @@
+aws_account_id = "511492912574"
+aws_region     = "us-east-2"
+owner          = "data-platform"

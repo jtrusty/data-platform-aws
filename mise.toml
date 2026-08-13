@@ -1,0 +1,80 @@
+[tools]
+aws-cli = "2.36.22"
+terraform = "1.15.8"
+tflint = "0.64.0"
+trivy = "0.73.0"
+
+[tasks.fmt]
+description = "Format Terraform files"
+run = "terraform fmt -recursive"
+
+[tasks."fmt:check"]
+description = "Check Terraform formatting"
+run = "terraform fmt -check -recursive"
+
+[tasks.validate]
+description = "Initialize and validate each Terraform root and module"
+run = '''
+set -eu
+rg --files infra -g 'versions.tf' | sed 's#/versions.tf$##' | sort -u | while read -r directory; do
+  terraform -chdir="$directory" init -backend=false -input=false
+  terraform -chdir="$directory" validate
+done
+'''
+
+[tasks.test]
+description = "Run Terraform tests"
+run = '''
+set -eu
+rg --files infra -g '*.tftest.hcl' | sed 's#/tests/.*##' | sort -u | while read -r directory; do
+  terraform -chdir="$directory" init -backend=false -input=false
+  terraform -chdir="$directory" test
+done
+'''
+
+[tasks.contract]
+description = "Verify fixed environment provider and state boundaries"
+run = '''
+set -eu
+for environment in sandbox development production; do
+  root="infra/environments/$environment"
+  bootstrap="infra/bootstrap/$environment"
+  rg -F 'allowed_account_ids = [var.aws_account_id]' "$root/main.tf"
+  rg -F 'Environment = local.environment' "$root/main.tf"
+  rg -F 'region         = "us-east-2"' "$root/backend.hcl.example"
+  rg -F "key            = \"data-platform/$environment/terraform.tfstate\"" "$root/backend.hcl.example"
+  rg -F 'kms_key_id' "$root/backend.hcl.example"
+  rg -F "key          = \"bootstrap/terraform.tfstate\"" "$bootstrap/backend.hcl.example"
+  rg -F 'kms_key_id' "$bootstrap/backend.hcl.example"
+done
+rg -F 'allowed_account_ids = ["699599381258"]' infra/organization/versions.tf
+rg -F 'key          = "organization/terraform.tfstate"' infra/organization/backend.hcl.example
+rg -F 'kms_key_id' infra/organization/backend.hcl.example
+rg -F 'key          = "bootstrap/management/terraform.tfstate"' infra/bootstrap/management/backend.hcl.example
+rg -F 'kms_key_id' infra/bootstrap/management/backend.hcl.example
+'''
+
+[tasks.lint]
+description = "Lint Terraform"
+run = "tflint --init && tflint --recursive"
+
+[tasks.security]
+description = "Scan Terraform for high-value security findings"
+run = "trivy config --exit-code 1 --severity HIGH,CRITICAL --skip-dirs '**/.terraform' --skip-version-check infra"
+
+[tasks.secrets]
+description = "Scan committed source for credentials and secret material"
+run = "trivy fs --scanners secret --exit-code 1 --skip-dirs .git --skip-dirs '**/.terraform' --skip-version-check ."
+
+[tasks.check]
+description = "Run all local CI checks"
+run = '''
+set -eu
+mise run fmt:check
+mise run validate
+mise run test
+mise run contract
+mise run lint
+mise run security
+mise run secrets
+'''
