@@ -23,10 +23,9 @@ module "state_backend" {
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
-  url             = "https://token.actions.githubusercontent.com"
-  client_id_list  = ["sts.amazonaws.com"]
-  thumbprint_list = []
-  tags            = merge(var.tags, { Purpose = "github-oidc" })
+  url            = "https://token.actions.githubusercontent.com"
+  client_id_list = ["sts.amazonaws.com"]
+  tags           = merge(var.tags, { Purpose = "github-oidc" })
 }
 
 resource "aws_iam_policy" "runtime_boundary" {

@@ -1,5 +1,6 @@
 # Terraform working directories and state
 **/.terraform/*
+**/.terraform-ci/*
 *.tfstate
 *.tfstate.*
 *.tfplan

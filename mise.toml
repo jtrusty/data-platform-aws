@@ -18,8 +18,8 @@ description = "Initialize and validate each Terraform root and module"
 run = '''
 set -eu
 rg --files infra -g 'versions.tf' | sed 's#/versions.tf$##' | sort -u | while read -r directory; do
-  terraform -chdir="$directory" init -backend=false -input=false
-  terraform -chdir="$directory" validate
+  TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" init -backend=false -input=false
+  TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" validate
 done
 '''
 
@@ -28,8 +28,8 @@ description = "Run Terraform tests"
 run = '''
 set -eu
 rg --files infra -g '*.tftest.hcl' | sed 's#/tests/.*##' | sort -u | while read -r directory; do
-  terraform -chdir="$directory" init -backend=false -input=false
-  terraform -chdir="$directory" test
+  TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" init -backend=false -input=false
+  TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" test
 done
 '''
 
@@ -63,6 +63,11 @@ rg -F 'key          = "organization/terraform.tfstate"' infra/organization/backe
 rg -F 'kms_key_id' infra/organization/backend.hcl.example
 rg -F 'key          = "bootstrap/management/terraform.tfstate"' infra/bootstrap/management/backend.hcl.example
 rg -F 'kms_key_id' infra/bootstrap/management/backend.hcl.example
+
+if rg 'thumbprint_list\s*=\s*\[\]' infra/modules/account_bootstrap; then
+  echo "GitHub OIDC thumbprints must be AWS-managed to avoid perpetual drift" >&2
+  exit 1
+fi
 '''
 
 [tasks.lint]
