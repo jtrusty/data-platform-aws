@@ -1,8 +1,8 @@
 # Security Model
 
 > Status: state, GitHub OIDC bootstrap, deployment boundaries, and Identity
-> Center access are implemented in Terraform but have not yet been applied to
-> AWS. Runtime roles and platform services remain planned.
+> Center access are applied and verified in AWS. Runtime roles and platform
+> services remain planned.
 
 ## Trust boundary
 

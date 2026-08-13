@@ -31,9 +31,20 @@ The discovery values now fixed in Terraform are:
 | `PlatformAdmins` | `118b3590-f061-7088-bff1-cc1c9f78d5c3` |
 | `DataEngineers` | `619b5560-5001-707a-8057-b239ffbd3ae1` |
 
-No permission sets, account assignments, state buckets, OIDC providers, or
-deployment roles from this repository exist in AWS until the Terraform roots
-below are applied.
+The Terraform roots below were applied on 2026-08-13. The temporary
+`BootstrapAdministrator` permission set and all four of its assignments were
+removed after permanent access was tested.
+
+| Environment | State bucket | GitHub role |
+| --- | --- | --- |
+| Management | `jtrusty-dp-tfstate-organization-699599381258-us-east-2` | None |
+| Sandbox | `jtrusty-dp-tfstate-sandbox-555044956444-us-east-2` | `jtrusty-data-platform-terraform-deploy-sandbox` |
+| Development | `jtrusty-dp-tfstate-development-511492912574-us-east-2` | `jtrusty-data-platform-terraform-deploy-development` |
+| Production | `jtrusty-dp-tfstate-production-991278600180-us-east-2` | `jtrusty-data-platform-terraform-deploy-production` and read-only `jtrusty-data-platform-terraform-plan-production` |
+
+Every remote state object was verified as versioned and KMS-encrypted. Every
+state bucket has all four S3 Block Public Access settings enabled, and every
+bootstrap root returned a no-change plan after migration.
 
 ## What SSO does
 
@@ -69,18 +80,18 @@ access by themselves:
 ```bash
 aws sso-admin list-instances \
   --region us-east-2 \
-  --profile organization-bootstrap
+  --profile organization-admin
 
 aws identitystore list-groups \
   --identity-store-id d-9a675d55f3 \
   --region us-east-2 \
-  --profile organization-bootstrap
+  --profile organization-admin
 
 aws identitystore list-group-memberships \
   --identity-store-id d-9a675d55f3 \
   --group-id b1bb85d0-60e1-7026-1ecc-206e3c4cb3cc \
   --region us-east-2 \
-  --profile organization-bootstrap
+  --profile organization-admin
 
 aws identitystore list-group-memberships \
   --identity-store-id d-9a675d55f3 \
@@ -88,15 +99,14 @@ aws identitystore list-group-memberships \
   --region us-east-2 \
   --query 'GroupMemberships[].MemberId.UserId' \
   --output text \
-  --profile organization-bootstrap
+  --profile organization-admin
 ```
 
 ## One manual chicken-and-egg step
 
 Before Terraform can manage Identity Center, one person must already be able to
-administer the management account. This is the temporary access that would be
-used for the first live Terraform plan and apply; it was not used for this
-credential-free repository implementation:
+administer the management account. This was the temporary access used for the
+first live Terraform plan and apply:
 
 1. The permanent administrator is the named Identity Center user
    `c1bba500-a0e1-70e7-52c2-5101377f116d`.
@@ -114,13 +124,13 @@ and Identity Center provisions its own account roles.
 
 ## Configure the management SSO profile
 
-Run the interactive wizard and select management account `699599381258` and
+The initial interactive wizard selected management account `699599381258` and
 the temporary bootstrap permission set:
 
 ```bash
-aws configure sso --profile organization-bootstrap
-aws sso login --profile organization-bootstrap
-aws sts get-caller-identity --profile organization-bootstrap
+aws configure sso --profile organization-admin
+aws sso login --profile organization-admin
+aws sts get-caller-identity --profile organization-admin
 ```
 
 Use the Identity Center access-portal URL and the Region in which Identity
@@ -134,7 +144,7 @@ one root with local state, apply it, and then migrate that state into the new
 bucket:
 
 ```bash
-export AWS_PROFILE=organization-bootstrap
+export AWS_PROFILE=organization-admin
 
 terraform -chdir=infra/bootstrap/management init -backend=false
 terraform -chdir=infra/bootstrap/management plan \
@@ -177,7 +187,7 @@ This root creates the permanent permission sets and account matrix:
 | `DataEngineers` | `DataEngineerProduction` | Production |
 
 ```bash
-export AWS_PROFILE=organization-bootstrap
+export AWS_PROFILE=organization-admin
 
 terraform -chdir=infra/organization init \
   -backend-config=backend.hcl.example
@@ -199,13 +209,13 @@ aws sts get-caller-identity --profile organization-admin
 
 ## Bootstrap each workload account
 
-Configure one SSO profile per workload account. Select the `PlatformAdmin`
-permission set when prompted:
+Configure one SSO profile per workload account. The live setup selected the
+`PlatformAdmin` permission set and used these profile names:
 
 ```bash
-aws configure sso --profile platform-sandbox
-aws configure sso --profile platform-development
-aws configure sso --profile platform-production
+aws configure sso --profile sandbox-admin
+aws configure sso --profile development-admin
+aws configure sso --profile production-admin
 ```
 
 For each account, log in, confirm the account ID, apply the bootstrap locally,
@@ -213,13 +223,13 @@ and migrate its bootstrap state into that account's own state bucket. Sandbox
 is shown here:
 
 ```bash
-aws sso login --profile platform-sandbox
+aws sso login --profile sandbox-admin
 aws sts get-caller-identity \
-  --profile platform-sandbox \
+  --profile sandbox-admin \
   --query Account \
   --output text
 
-export AWS_PROFILE=platform-sandbox
+export AWS_PROFILE=sandbox-admin
 
 terraform -chdir=infra/bootstrap/sandbox init -backend=false
 terraform -chdir=infra/bootstrap/sandbox plan \
@@ -235,8 +245,8 @@ terraform -chdir=infra/bootstrap/sandbox init \
 terraform -chdir=infra/bootstrap/sandbox state list
 ```
 
-Repeat with `development`/`platform-development` and
-`production`/`platform-production`. Provider account allowlists make an apply
+Repeat with `development`/`development-admin` and
+`production`/`production-admin`. Provider account allowlists make an apply
 fail if the selected profile belongs to the wrong account.
 
 Each workload bootstrap creates:
@@ -251,13 +261,28 @@ The deployment role can pass only the four approved runtime role ARNs to their
 approved AWS services. It cannot replace runtime boundaries or modify its own
 trust, boundary, OIDC provider, or protected state controls.
 
-## GitHub configuration still required
+## GitHub configuration
 
-Create GitHub Environments named `sandbox`, `development`, `production-plan`,
-and `production`. Record the Terraform output role ARN for the corresponding
-environment. Require a reviewer for `production`, prevent self-review, and
-restrict production deployment to protected release tags. The required
-production reviewer is GitHub user `jtrusty`.
+The `sandbox`, `development`, `production-plan`, and `production` GitHub
+Environments were created on 2026-08-13. Each stores only non-secret
+`AWS_ACCOUNT_ID`, `AWS_REGION`, and `AWS_ROLE_ARN` variables. No AWS access key
+or human SSO credential is stored in GitHub.
+
+- `sandbox` accepts manual deployments from any selected ref.
+- `development` accepts only the `main` branch.
+- `production-plan` accepts any ref but uses the read-only production plan role.
+- `production` accepts only `v*` tags and requires approval from `jtrusty`.
+
+Because `jtrusty` is presently the only production reviewer, self-review is
+allowed. Enabling “prevent self-review” with that single reviewer would make
+production undeployable. Add a second trusted reviewer before enabling that
+control.
+
+The repository was created after GitHub introduced immutable OIDC subjects.
+GitHub reports the prefix
+`repo:jtrusty@6896625/data-platform-aws@1333254672`, which exactly matches the
+AWS trust policies. The deployment workflow uses short-lived OIDC sessions and
+verifies the resulting AWS account before every plan or apply.
 
 ## Root-user protection
 
@@ -409,9 +434,11 @@ its own MFA device.
 Deleting member-account root credentials is a separate privileged,
 destructive security operation. No deletion was required by this audit.
 
-The repository currently runs credential-free static CI only. A later delivery
-adds plan/apply workflows after the AWS bootstrap roles exist. Do not store AWS
-access keys in GitHub secrets.
+The repository runs credential-free static CI plus OIDC deployment jobs:
+manual sandbox apply, automatic development apply from `main`, read-only
+production plans, and approved production apply from a `v*` tag. Production
+promotion additionally requires a successful development deployment for the
+exact tagged commit. Do not store AWS access keys in GitHub secrets.
 
 ## Local development commands used
 
@@ -425,6 +452,7 @@ mise run validate
 mise run test
 mise run contract
 mise run lint
+mise run lint:actions
 mise run security
 mise run secrets
 mise run check
@@ -436,11 +464,14 @@ The remote was configured with:
 git remote add origin https://github.com/jtrusty/data-platform-aws.git
 ```
 
-No `terraform apply`, Identity Center assignment change, or platform-resource
-creation command was run while building this repository milestone. The three
-centralized root-access enablement commands above were the only manual IAM or
-Organizations mutations; all subsequent checks were read-only or used
-audit-only temporary root sessions.
+Terraform was used to create the four state backends, permanent Identity Center
+permission sets and assignments, three GitHub OIDC providers, three bounded
+deployment roles, and the read-only production plan role. The temporary
+`BootstrapAdministrator` assignments were deleted only after permanent
+`OrganizationAdmin` and all three `PlatformAdmin` sessions were verified with
+`aws sts get-caller-identity`. Root-level plaintext state backups produced by
+backend migration were deleted after their versioned, encrypted S3 copies were
+verified.
 
 ## Official AWS references
 

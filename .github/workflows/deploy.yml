@@ -1,0 +1,243 @@
+name: Deploy platform
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/deploy.yml"
+      - "infra/**"
+      - "mise.toml"
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quality:
+    name: Quality and security checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mise
+        uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
+        with:
+          install: true
+          cache: true
+
+      - name: Run Terraform tests and static checks
+        run: mise run check
+
+  sandbox:
+    name: Apply sandbox
+    if: github.event_name == 'workflow_dispatch'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: sandbox
+    concurrency:
+      group: terraform-sandbox
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mise
+        uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
+        with:
+          install: true
+          cache: true
+
+      - name: Assume sandbox deployment role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: github-terraform-sandbox
+
+      - name: Verify AWS account
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
+
+      - name: Plan sandbox
+        run: |
+          terraform -chdir=infra/environments/sandbox init -input=false -backend-config=backend.hcl.example
+          terraform -chdir=infra/environments/sandbox plan -input=false -out=sandbox.tfplan
+
+      - name: Apply sandbox
+        run: terraform -chdir=infra/environments/sandbox apply -input=false sandbox.tfplan
+
+  development:
+    name: Apply development
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: development
+    concurrency:
+      group: terraform-development
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mise
+        uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
+        with:
+          install: true
+          cache: true
+
+      - name: Assume development deployment role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: github-terraform-development
+
+      - name: Verify AWS account
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
+
+      - name: Plan development
+        run: |
+          terraform -chdir=infra/environments/development init -input=false -backend-config=backend.hcl.example
+          terraform -chdir=infra/environments/development plan -input=false -out=development.tfplan
+
+      - name: Apply development
+        run: terraform -chdir=infra/environments/development apply -input=false development.tfplan
+
+  production-plan:
+    name: Plan production
+    if: >-
+      (github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository) ||
+      (github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v'))
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production-plan
+    concurrency:
+      group: terraform-production-plan-${{ github.event.pull_request.number || github.sha }}
+      cancel-in-progress: true
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mise
+        uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
+        with:
+          install: true
+          cache: true
+
+      - name: Assume production plan role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: github-terraform-production-plan
+
+      - name: Verify AWS account
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
+
+      - name: Plan production
+        run: |
+          terraform -chdir=infra/environments/production init -input=false -backend-config=backend.hcl.example
+          terraform -chdir=infra/environments/production plan -input=false
+
+  verify-production-promotion:
+    name: Verify development promotion
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      deployments: read
+
+    steps:
+      - name: Require successful development deployment for this commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          deployment_id="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/deployments?sha=${GITHUB_SHA}&environment=development" \
+            --jq '.[0].id // empty')"
+          test -n "$deployment_id"
+          deployment_status="$(gh api \
+            "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
+            --jq '.[0].state // empty')"
+          test "$deployment_status" = "success"
+
+  production:
+    name: Apply production
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - quality
+      - production-plan
+      - verify-production-promotion
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    concurrency:
+      group: terraform-production
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mise
+        uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
+        with:
+          install: true
+          cache: true
+
+      - name: Assume production deployment role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: github-terraform-production
+
+      - name: Verify AWS account
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
+
+      - name: Plan production apply
+        run: |
+          terraform -chdir=infra/environments/production init -input=false -backend-config=backend.hcl.example
+          terraform -chdir=infra/environments/production plan -input=false -out=production.tfplan
+
+      - name: Apply production
+        run: terraform -chdir=infra/environments/production apply -input=false production.tfplan

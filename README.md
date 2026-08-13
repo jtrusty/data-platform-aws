@@ -17,9 +17,10 @@ This first increment establishes:
 - formatting, validation, linting, and security-scanning CI; and
 - the target trust model in [SECURITY.md](SECURITY.md).
 
-Runtime IAM, networking, messaging, metadata, analytics, and Redshift modules
-are the next increments. Nothing has been applied to AWS yet. Follow the
-operator sequence in [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) when ready.
+The state, Identity Center, GitHub OIDC, and deployment-role bootstrap is live
+in all four accounts. Runtime IAM, networking, messaging, metadata, analytics,
+and Redshift modules are the next increments. See
+[docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) for the dated deployment record.
 
 ## Local setup
 
@@ -92,8 +93,7 @@ Nearly all IAM configuration belongs in Terraform. The one-time manual setup is:
 3. Create the first administrative workforce identity and `Data Engineers` group.
 4. Create temporary administrator sessions used only to apply bootstrap stacks.
 5. Create GitHub Environments named `sandbox`, `development`,
-   `production-plan`, and `production`; production requires `jtrusty` review
-   and prevents self-review.
+   `production-plan`, and `production`; production requires `jtrusty` review.
 
 Terraform then owns:
 

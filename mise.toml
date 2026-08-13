@@ -1,4 +1,5 @@
 [tools]
+actionlint = "1.7.12"
 aws-cli = "2.36.22"
 ripgrep = "15.1.0"
 terraform = "1.15.8"
@@ -68,11 +69,27 @@ if rg 'thumbprint_list\s*=\s*\[\]' infra/modules/account_bootstrap; then
   echo "GitHub OIDC thumbprints must be AWS-managed to avoid perpetual drift" >&2
   exit 1
 fi
+
+deployment_workflow=".github/workflows/deploy.yml"
+test -f "$deployment_workflow"
+rg -F 'id-token: write' "$deployment_workflow"
+rg -F "github.event.pull_request.head.repo.full_name == github.repository" "$deployment_workflow"
+rg -F 'environment: production-plan' "$deployment_workflow"
+rg -F 'environment: development' "$deployment_workflow"
+rg -F 'environment: production' "$deployment_workflow"
+rg -F 'environment: sandbox' "$deployment_workflow"
+rg -F 'aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c' "$deployment_workflow"
+rg -F 'environment=development' "$deployment_workflow"
+rg -F 'apply -input=false' "$deployment_workflow"
 '''
 
 [tasks.lint]
 description = "Lint Terraform"
 run = "tflint --init && tflint --recursive"
+
+[tasks."lint:actions"]
+description = "Lint GitHub Actions workflows"
+run = "actionlint"
 
 [tasks.security]
 description = "Scan Terraform for high-value security findings"
@@ -91,6 +108,7 @@ mise run validate
 mise run test
 mise run contract
 mise run lint
+mise run lint:actions
 mise run security
 mise run secrets
 '''
