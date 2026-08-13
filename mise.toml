@@ -1,5 +1,6 @@
 [tools]
 aws-cli = "2.36.22"
+ripgrep = "15.1.0"
 terraform = "1.15.8"
 tflint = "0.64.0"
 trivy = "0.73.0"
