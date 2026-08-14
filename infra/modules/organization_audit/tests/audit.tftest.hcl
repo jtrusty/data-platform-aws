@@ -62,7 +62,10 @@ run "organization_trail_is_complete_and_cheap" {
     condition = (
       one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "DenyInsecureTransport"]).Effect == "Deny" &&
       one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "AWSCloudTrailWrite"]).Condition.StringEquals["aws:SourceArn"] == "arn:aws:cloudtrail:us-east-2:699599381258:trail/jtrusty-data-platform-organization" &&
-      one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "AWSCloudTrailWrite"]).Resource == "arn:aws:s3:::jtrusty-dp-audit-699599381258-us-east-2/AWSLogs/o-000000000000/*"
+      toset(one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "AWSCloudTrailWrite"]).Resource) == toset([
+        "arn:aws:s3:::jtrusty-dp-audit-699599381258-us-east-2/AWSLogs/699599381258/*",
+        "arn:aws:s3:::jtrusty-dp-audit-699599381258-us-east-2/AWSLogs/o-000000000000/*",
+      ])
     )
     error_message = "Only this organization trail may write audit objects, and only over TLS."
   }
