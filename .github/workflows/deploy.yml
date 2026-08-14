@@ -5,6 +5,7 @@ on:
     paths:
       - ".github/workflows/deploy.yml"
       - "infra/**"
+      - "scripts/**"
       - "mise.toml"
   push:
     branches:
@@ -25,6 +26,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality:
     name: Quality and security checks
@@ -44,12 +49,63 @@ jobs:
       - name: Run Terraform tests and static checks
         run: mise run check
 
+  # Same-repository pull requests plan the non-production roots with read-only
+  # credentials so a change is reviewed against its real diff, not just tests.
+  pull-request-plan:
+    name: Plan ${{ matrix.environment }}
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs: quality
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ matrix.environment }}-plan
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        environment:
+          - sandbox
+          - development
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mise
+        uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
+        with:
+          install: true
+          cache: true
+
+      - name: Assume ${{ matrix.environment }} plan role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: github-terraform-${{ matrix.environment }}-plan
+
+      - name: Verify AWS account
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
+
+      - name: Plan ${{ matrix.environment }}
+        env:
+          ENVIRONMENT: ${{ matrix.environment }}
+        run: |
+          terraform -chdir="infra/environments/${ENVIRONMENT}" init -input=false -backend-config=backend.hcl
+          terraform -chdir="infra/environments/${ENVIRONMENT}" plan -input=false -lock=false
+
   sandbox:
     name: Apply sandbox
     if: github.event_name == 'workflow_dispatch' && inputs.target == 'sandbox'
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: sandbox
     concurrency:
       group: terraform-sandbox
@@ -83,18 +139,24 @@ jobs:
 
       - name: Plan sandbox
         run: |
-          terraform -chdir=infra/environments/sandbox init -input=false -backend-config=backend.hcl.example
+          terraform -chdir=infra/environments/sandbox init -input=false -backend-config=backend.hcl
           terraform -chdir=infra/environments/sandbox plan -input=false -out=sandbox.tfplan
 
       - name: Apply sandbox
         run: terraform -chdir=infra/environments/sandbox apply -input=false sandbox.tfplan
+
+      - name: Bootstrap sandbox database access
+        run: scripts/bootstrap-redshift-database.sh sandbox
+
+      - name: Enforce sandbox log retention
+        run: scripts/enforce-log-retention.sh sandbox 7
 
   development:
     name: Apply development
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: development
     concurrency:
       group: terraform-development
@@ -128,11 +190,17 @@ jobs:
 
       - name: Plan development
         run: |
-          terraform -chdir=infra/environments/development init -input=false -backend-config=backend.hcl.example
+          terraform -chdir=infra/environments/development init -input=false -backend-config=backend.hcl
           terraform -chdir=infra/environments/development plan -input=false -out=development.tfplan
 
       - name: Apply development
         run: terraform -chdir=infra/environments/development apply -input=false development.tfplan
+
+      - name: Bootstrap development database access
+        run: scripts/bootstrap-redshift-database.sh development
+
+      - name: Enforce development log retention
+        run: scripts/enforce-log-retention.sh development 14
 
   production-plan:
     name: Plan production
@@ -143,7 +211,7 @@ jobs:
       (github.event_name == 'workflow_dispatch' && inputs.target == 'production-plan')
     needs: quality
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: production-plan
     concurrency:
       group: terraform-production-plan-${{ github.event.pull_request.number || github.sha }}
@@ -151,6 +219,8 @@ jobs:
     permissions:
       contents: read
       id-token: write
+    outputs:
+      plan_fingerprint: ${{ steps.fingerprint.outputs.value }}
 
     steps:
       - name: Check out repository
@@ -177,8 +247,22 @@ jobs:
 
       - name: Plan production
         run: |
-          terraform -chdir=infra/environments/production init -input=false -backend-config=backend.hcl.example
-          terraform -chdir=infra/environments/production plan -input=false
+          terraform -chdir=infra/environments/production init -input=false -backend-config=backend.hcl
+          terraform -chdir=infra/environments/production plan -input=false -lock=false -out=production.tfplan
+          terraform -chdir=infra/environments/production show -no-color production.tfplan
+
+      # The reviewed set of resource changes is published as a fingerprint. The
+      # apply job recomputes it and refuses to apply a different diff than the
+      # one an approver saw. The plan file itself is deliberately not uploaded:
+      # artifacts of a public repository are world-readable.
+      - name: Fingerprint reviewed plan
+        id: fingerprint
+        run: |
+          value="$(terraform -chdir=infra/environments/production show -json production.tfplan \
+            | jq -Sc '[.resource_changes[]? | {address, actions: .change.actions}] | sort_by(.address)' \
+            | sha256sum | cut -d" " -f1)"
+          echo "value=${value}" >>"$GITHUB_OUTPUT"
+          echo "Reviewed plan fingerprint: ${value}"
 
   verify-production-promotion:
     name: Verify development promotion
@@ -212,7 +296,7 @@ jobs:
       - production-plan
       - verify-production-promotion
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     environment: production
     concurrency:
       group: terraform-production
@@ -246,8 +330,27 @@ jobs:
 
       - name: Plan production apply
         run: |
-          terraform -chdir=infra/environments/production init -input=false -backend-config=backend.hcl.example
+          terraform -chdir=infra/environments/production init -input=false -backend-config=backend.hcl
           terraform -chdir=infra/environments/production plan -input=false -out=production.tfplan
+
+      - name: Require the approved plan
+        env:
+          REVIEWED_FINGERPRINT: ${{ needs.production-plan.outputs.plan_fingerprint }}
+        run: |
+          current="$(terraform -chdir=infra/environments/production show -json production.tfplan \
+            | jq -Sc '[.resource_changes[]? | {address, actions: .change.actions}] | sort_by(.address)' \
+            | sha256sum | cut -d" " -f1)"
+          if [[ "$current" != "$REVIEWED_FINGERPRINT" ]]; then
+            echo "Production changed after review (reviewed ${REVIEWED_FINGERPRINT}, now ${current})." >&2
+            echo "Re-run the tag so the new diff is planned and approved before applying." >&2
+            exit 1
+          fi
 
       - name: Apply production
         run: terraform -chdir=infra/environments/production apply -input=false production.tfplan
+
+      - name: Bootstrap production database access
+        run: scripts/bootstrap-redshift-database.sh production
+
+      - name: Enforce production log retention
+        run: scripts/enforce-log-retention.sh production 30

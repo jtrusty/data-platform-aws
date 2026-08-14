@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+printf '%q ' "$@" >>"${AWS_STUB_LOG:?}"
+printf '\n' >>"$AWS_STUB_LOG"
+
+service="${1:-}"
+operation="${2:-}"
+
+case "${service}:${operation}" in
+  iam:list-roles)
+    printf '%s\n' "AWSReservedSSO_DataEngineerNonProd_0123456789ABCDEF"
+    ;;
+  redshift-serverless:get-workgroup)
+    printf '%s\n' "${AWS_STUB_WORKGROUP_STATUS:-AVAILABLE}"
+    ;;
+  logs:describe-log-groups)
+    printf '%s\n' "${AWS_STUB_UNBOUNDED_LOG_GROUPS-None}"
+    ;;
+  logs:put-retention-policy)
+    ;;
+  redshift-data:execute-statement)
+    arguments="$*"
+    if [[ "$arguments" == *"FROM svv_roles"* ]]; then
+      printf '%s\n' "role-count"
+    elif [[ "$arguments" == *"FROM pg_user_info"* ]]; then
+      printf '%s\n' "user-count"
+    else
+      printf '%s\n' "mutation"
+    fi
+    ;;
+  redshift-data:describe-statement)
+    printf '%s\n' "FINISHED"
+    ;;
+  redshift-data:get-statement-result)
+    arguments="$*"
+    if [[ "$arguments" == *"role-count"* ]]; then
+      printf '%s\n' "${AWS_STUB_ROLE_COUNT:-0}"
+    elif [[ "$arguments" == *"user-count"* ]]; then
+      printf '%s\n' "${AWS_STUB_USER_COUNT:-0}"
+    else
+      echo "unexpected statement result request" >&2
+      exit 1
+    fi
+    ;;
+  *)
+    echo "unexpected AWS CLI call: $*" >&2
+    exit 1
+    ;;
+esac

@@ -1,11 +1,8 @@
 # Deployment and security-boundary changes require repository-owner review.
+* @jtrusty
 /.github/workflows/ @jtrusty
 /infra/bootstrap/ @jtrusty
-/infra/organization/ @jtrusty
 /infra/modules/ @jtrusty
-/infra/modules/account_bootstrap/ @jtrusty
-/infra/modules/identity_center_access/ @jtrusty
-/infra/modules/state_backend/ @jtrusty
-/infra/bootstrap/ @jtrusty
 /infra/organization/ @jtrusty
+/scripts/ @jtrusty
 /SECURITY.md @jtrusty

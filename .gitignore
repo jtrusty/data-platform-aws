@@ -14,11 +14,9 @@ infra/bootstrap/*/backend.tf
 !infra/environments/sandbox/foundation.auto.tfvars
 !infra/environments/development/foundation.auto.tfvars
 !infra/environments/production/foundation.auto.tfvars
-*.hcl
-!.tflint.hcl
-!*.hcl.example
-!.terraform.lock.hcl
-!*.tftest.hcl
+
+# Provider downloads are cached once instead of per root
+.terraform-plugin-cache/
 
 # Local credentials and environment files
 .env

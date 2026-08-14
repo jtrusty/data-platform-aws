@@ -205,6 +205,14 @@ run "sandbox_uses_low_fixed_cost_defaults" {
 
   assert {
     condition = alltrue([
+      for statement in jsondecode(aws_iam_role.runtime["redshift"].assume_role_policy).Statement :
+      statement.Condition.StringEquals["aws:SourceAccount"] == "555044956444"
+    ])
+    error_message = "The Redshift trust must reject confused-deputy requests from other AWS accounts."
+  }
+
+  assert {
+    condition = alltrue([
       for role_name in ["transform", "orchestration"] : anytrue([
         for statement in jsondecode(aws_iam_role_policy.runtime[role_name].policy).Statement :
         contains(flatten([statement.Action]), "s3:PutObject") &&

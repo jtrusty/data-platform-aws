@@ -1,0 +1,23 @@
+version: 2
+
+updates:
+  # Actions are pinned by commit digest, which never updates on its own.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(ci)"
+
+  - package-ecosystem: terraform
+    directories:
+      - /infra/bootstrap/*
+      - /infra/environments/*
+      - /infra/modules/*
+      - /infra/organization
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "chore(terraform)"

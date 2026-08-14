@@ -4,8 +4,8 @@ output "deployment_role_arn" {
 }
 
 output "plan_role_arn" {
-  description = "Production read-only Terraform plan role ARN, if applicable."
-  value       = try(aws_iam_role.terraform_plan[0].arn, null)
+  description = "Read-only Terraform plan role ARN for this environment."
+  value       = aws_iam_role.terraform_plan.arn
 }
 
 output "runtime_boundary_arn" {

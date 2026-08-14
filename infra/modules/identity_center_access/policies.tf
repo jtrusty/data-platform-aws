@@ -3,17 +3,20 @@ locals {
     sandbox = {
       account_id = local.workload_accounts.sandbox
       prefix     = "data-platform-sandbox"
+      catalog    = "data_platform_sandbox"
       secret     = "data-platform/sandbox"
     }
     development = {
       account_id = local.workload_accounts.development
       prefix     = "data-platform-development"
+      catalog    = "data_platform_development"
       secret     = "data-platform/development"
     }
   }
   production_environment = {
     account_id = local.workload_accounts.production
     prefix     = "data-platform-production"
+    catalog    = "data_platform_production"
     secret     = "data-platform/production"
   }
 
@@ -40,7 +43,6 @@ locals {
     "glue:List*",
     "lambda:List*",
     "logs:Describe*", "logs:List*",
-    "redshift-data:List*",
     "redshift-serverless:List*",
     "sqs:ListQueues",
     "states:List*",
@@ -66,72 +68,79 @@ locals {
     "s3:ListMultipartUploadParts", "s3:PutObject", "s3:RestoreObject",
   ]
 
-  nonprod_environment_statements = flatten([
-    for name, environment in local.nonprod_environments : [
-      {
-        Sid      = "Operate${replace(title(name), "-", "")}Resources"
-        Effect   = "Allow"
-        Action   = local.data_engineer_resource_actions
-        Resource = local.data_engineer_resource_arns[environment.prefix]
-      },
-      {
-        Sid    = "Query${replace(title(name), "-", "")}Redshift"
-        Effect = "Allow"
-        Action = [
-          "redshift-data:BatchExecuteStatement",
-          "redshift-data:ExecuteStatement",
-          "redshift-serverless:GetCredentials",
-          "redshift-serverless:GetNamespace",
-          "redshift-serverless:GetWorkgroup",
-        ]
-        Resource = [
+  # Sandbox and development share one set of statements. Emitting the identical
+  # action lists twice previously consumed most of the 10,240-byte permission-set
+  # quota; the union is the same access, since both accounts are non-production
+  # and every Terraform-owned tag is administrator-controlled.
+  nonprod_environment_statements = [
+    {
+      Sid      = "OperateNonProdResources"
+      Effect   = "Allow"
+      Action   = local.data_engineer_resource_actions
+      Resource = flatten([for environment in values(local.nonprod_environments) : local.data_engineer_resource_arns[environment.prefix]])
+    },
+    {
+      Sid    = "QueryNonProdRedshift"
+      Effect = "Allow"
+      Action = [
+        "redshift-data:BatchExecuteStatement",
+        "redshift-data:ExecuteStatement",
+        "redshift-data:ListDatabases",
+        "redshift-data:ListSchemas",
+        "redshift-data:ListTables",
+        "redshift-serverless:GetCredentials",
+        "redshift-serverless:GetNamespace",
+        "redshift-serverless:GetWorkgroup",
+      ]
+      Resource = flatten([
+        for environment in values(local.nonprod_environments) : [
           "arn:aws:redshift-serverless:us-east-2:${environment.account_id}:namespace/*",
           "arn:aws:redshift-serverless:us-east-2:${environment.account_id}:workgroup/*",
         ]
-        Condition = {
-          StringEquals = {
-            "aws:ResourceTag/Platform"    = "data-platform"
-            "aws:ResourceTag/Environment" = name
-          }
+      ])
+      Condition = {
+        StringEquals = {
+          "aws:ResourceTag/Platform"    = "data-platform"
+          "aws:ResourceTag/Environment" = keys(local.nonprod_environments)
         }
-      },
-      {
-        Sid      = "Operate${replace(title(name), "-", "")}Data"
-        Effect   = "Allow"
-        Action   = local.data_engineer_s3_actions
-        Resource = ["arn:aws:s3:::${environment.prefix}-*", "arn:aws:s3:::${environment.prefix}-*/*"]
-      },
-      {
-        Sid      = "Read${replace(title(name), "-", "")}Secrets"
-        Effect   = "Allow"
-        Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue", "secretsmanager:ListSecretVersionIds"]
-        Resource = "arn:aws:secretsmanager:us-east-2:${environment.account_id}:secret:${environment.secret}/*"
-      },
-      {
-        Sid      = "Use${replace(title(name), "-", "")}DataKeys"
-        Effect   = "Allow"
-        Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey*"]
-        Resource = "*"
-        Condition = {
-          StringEquals = {
-            "aws:ResourceTag/Platform"    = "data-platform"
-            "aws:ResourceTag/Environment" = name
-          }
+      }
+    },
+    {
+      Sid      = "OperateNonProdData"
+      Effect   = "Allow"
+      Action   = local.data_engineer_s3_actions
+      Resource = flatten([for environment in values(local.nonprod_environments) : ["arn:aws:s3:::${environment.prefix}-*", "arn:aws:s3:::${environment.prefix}-*/*"]])
+    },
+    {
+      Sid      = "ReadNonProdSecrets"
+      Effect   = "Allow"
+      Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue", "secretsmanager:ListSecretVersionIds"]
+      Resource = [for environment in values(local.nonprod_environments) : "arn:aws:secretsmanager:us-east-2:${environment.account_id}:secret:${environment.secret}/*"]
+    },
+    {
+      Sid      = "UseNonProdDataKeys"
+      Effect   = "Allow"
+      Action   = ["kms:Decrypt", "kms:DescribeKey", "kms:Encrypt", "kms:GenerateDataKey*"]
+      Resource = "*"
+      Condition = {
+        StringEquals = {
+          "aws:ResourceTag/Platform"    = "data-platform"
+          "aws:ResourceTag/Environment" = keys(local.nonprod_environments)
         }
-      },
-      {
-        Sid      = "Deny${replace(title(name), "-", "")}StateKey"
-        Effect   = "Deny"
-        Action   = "kms:*"
-        Resource = "*"
-        Condition = {
-          "ForAnyValue:StringLike" = {
-            "kms:ResourceAliases" = "alias/jtrusty-data-platform-tfstate-${name}"
-          }
+      }
+    },
+    {
+      Sid      = "DenyNonProdStateKeys"
+      Effect   = "Deny"
+      Action   = "kms:*"
+      Resource = "*"
+      Condition = {
+        "ForAnyValue:StringLike" = {
+          "kms:ResourceAliases" = [for name in keys(local.nonprod_environments) : "alias/jtrusty-data-platform-tfstate-${name}"]
         }
-      },
-    ]
-  ])
+      }
+    },
+  ]
 
   production_environment_statements = [
     {
@@ -146,6 +155,9 @@ locals {
       Action = [
         "redshift-data:BatchExecuteStatement",
         "redshift-data:ExecuteStatement",
+        "redshift-data:ListDatabases",
+        "redshift-data:ListSchemas",
+        "redshift-data:ListTables",
         "redshift-serverless:GetCredentials",
         "redshift-serverless:GetNamespace",
         "redshift-serverless:GetWorkgroup",
@@ -201,6 +213,31 @@ locals {
     },
   ]
 
+  # Terraform owns the cost-controlled Athena workgroup and the Bronze/Silver
+  # catalog databases. Broad athena:* and glue:*Database on the platform prefix
+  # would otherwise let an engineer delete the query cost cap or a catalog.
+  # The matching region deny is attached as a customer-managed policy instead of
+  # inline text so these documents stay inside the 10,240-byte quota.
+  terraform_owned_analytics_denies = {
+    for name, environment in local.protected_environments : name => [
+      {
+        Sid    = "Protect${replace(title(name), "-", "")}TerraformAnalytics"
+        Effect = "Deny"
+        Action = ["athena:DeleteWorkGroup", "athena:UpdateWorkGroup", "glue:DeleteDatabase", "glue:UpdateDatabase"]
+        Resource = [
+          "arn:aws:athena:us-east-2:${environment.account_id}:workgroup/${environment.prefix}-analytics",
+          "arn:aws:glue:us-east-2:${environment.account_id}:database/${environment.catalog}_bronze",
+          "arn:aws:glue:us-east-2:${environment.account_id}:database/${environment.catalog}_silver",
+        ]
+      },
+    ]
+  }
+
+  protected_environments = {
+    development = local.nonprod_environments.development
+    production  = local.production_environment
+  }
+
   protected_development_resources = [
     {
       Sid      = "ProtectDevelopmentMetadata"
@@ -249,12 +286,14 @@ locals {
       "arn:aws:dynamodb:us-east-2:${environment.account_id}:table/${environment.prefix}-*/index/*",
       "arn:aws:glue:us-east-2:${environment.account_id}:catalog",
       "arn:aws:glue:us-east-2:${environment.account_id}:crawler/${environment.prefix}-*",
-      "arn:aws:glue:us-east-2:${environment.account_id}:database/${environment.prefix}*",
+      "arn:aws:glue:us-east-2:${environment.account_id}:database/${environment.catalog}*",
       "arn:aws:glue:us-east-2:${environment.account_id}:job/${environment.prefix}-*",
-      "arn:aws:glue:us-east-2:${environment.account_id}:table/${environment.prefix}*/*",
+      "arn:aws:glue:us-east-2:${environment.account_id}:table/${environment.catalog}*/*",
       "arn:aws:lambda:us-east-2:${environment.account_id}:function:${environment.prefix}-*",
       "arn:aws:logs:us-east-2:${environment.account_id}:log-group:/aws-glue/*",
       "arn:aws:logs:us-east-2:${environment.account_id}:log-group:/aws/lambda/${environment.prefix}-*:*",
+      "arn:aws:logs:us-east-2:${environment.account_id}:log-group:/aws/redshift/${environment.prefix}-warehouse/*",
+      "arn:aws:logs:us-east-2:${environment.account_id}:log-group:/aws/redshift/${environment.prefix}-warehouse/*:*",
       "arn:aws:sqs:us-east-2:${environment.account_id}:${environment.prefix}-*",
       "arn:aws:states:us-east-2:${environment.account_id}:execution:${environment.prefix}-*:*",
       "arn:aws:states:us-east-2:${environment.account_id}:stateMachine:${environment.prefix}-*",
@@ -269,6 +308,7 @@ locals {
       [local.read_owned_redshift_statements],
       local.passrole_statements_nonprod,
       local.protected_development_resources,
+      local.terraform_owned_analytics_denies.development,
     )
   })
 
@@ -280,6 +320,7 @@ locals {
       [local.read_owned_redshift_statements],
       local.passrole_statements_production,
       local.protected_production_resources,
+      local.terraform_owned_analytics_denies.production,
     )
   })
 
@@ -290,6 +331,7 @@ locals {
       "redshift-data:CancelStatement",
       "redshift-data:DescribeStatement",
       "redshift-data:GetStatementResult",
+      "redshift-data:ListStatements",
     ]
     Resource = "*"
     Condition = {

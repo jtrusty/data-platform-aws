@@ -15,8 +15,10 @@ alerts remain necessary.
 | DynamoDB | One Standard table at 1 RCU and 1 WCU | Uses a small part of the payer-level 25 RCU/25 WCU monthly Free Tier allowance |
 | Secrets Manager | No containers until an integration needs one | Each secret has a recurring charge; Terraform never stores its value |
 | Runtime IAM | Four responsibility-based roles | IAM roles and policies have no direct hourly charge |
-| Networking | None until a private workload exists | Avoids NAT gateway and interface-endpoint hourly charges |
-| Redshift | Disabled until the analytics increment | Avoids compute and storage use before consumers exist |
+| Athena | Engine v3, enforced result bucket, 10 GiB per-query cutoff | No idle charge; standard SQL is billed by bytes scanned |
+| Networking | Private VPC, three subnets, one route table, S3 gateway endpoint | These primitives have no hourly charge; no NAT or paid interface endpoint |
+| Redshift | 4 base/maximum RPU, 16 RPU-hour monthly deactivation limit | Idles without compute charge and hard-stops near $6 of monthly compute at the current example rate |
+| CloudTrail | One organization trail, management events only | The first copy of management events per account is free; only capped S3 storage is billed |
 
 Terraform state intentionally retains a separate customer-managed KMS key in
 each account. That key fee is accepted because state can contain sensitive
@@ -31,6 +33,8 @@ Current official pricing references:
 - [Amazon DynamoDB pricing and Free Tier](https://aws.amazon.com/dynamodb/pricing/)
 - [AWS KMS pricing](https://aws.amazon.com/kms/pricing/)
 - [AWS Secrets Manager pricing](https://aws.amazon.com/secrets-manager/pricing/)
+- [Amazon Athena pricing](https://aws.amazon.com/athena/pricing/)
+- [Amazon VPC pricing](https://aws.amazon.com/vpc/pricing/)
 - [Amazon Redshift pricing](https://aws.amazon.com/redshift/pricing/)
 
 ## Environment profiles
@@ -39,6 +43,10 @@ Current official pricing references:
 | --- | ---: | ---: | ---: |
 | Landing retention | 7 days | 14 days | 30 days |
 | Athena result retention | 7 days | 14 days | 30 days |
+| Athena per-query scan cutoff | 10 GiB | 10 GiB | 10 GiB |
+| Redshift base / maximum | 4 / 4 RPU | 4 / 4 RPU | 4 / 4 RPU |
+| Redshift monthly compute cutoff | 16 RPU-hours | 16 RPU-hours | 16 RPU-hours |
+| Redshift audit-log retention | 7 days | 14 days | 30 days |
 | Current artifact retention | 30 days | 90 days | 365 days |
 | Noncurrent Bronze/artifact versions | 7 days | 30 days | 90 days |
 | DynamoDB capacity | 1 RCU / 1 WCU | 1 RCU / 1 WCU | 1 RCU / 1 WCU |
@@ -54,6 +62,20 @@ versions Silver for recovery, while nonproduction relies on reproducibility and
 Iceberg snapshot maintenance. These are starting points to adjust from observed
 volume and recovery requirements.
 
+## Athena for Bronze and Silver
+
+Athena is the default engine for ad hoc exploration and Bronze/Silver lake
+transformations. It has no idle capacity charge. Standard SQL currently costs
+$5 per TB scanned, so the enforced 10 GiB workgroup cutoff limits one query to
+about $0.05. Columnar Parquet/Iceberg data, partition pruning, and selecting
+only required columns usually reduce the actual scan further.
+
+Each environment has one workgroup, an encrypted account-owned results prefix,
+CloudWatch metrics, and baseline `data_platform_<environment>_bronze` and
+`data_platform_<environment>_silver` Glue databases. The Glue Data Catalog's
+first million objects and first million monthly requests are currently free.
+S3 storage and request charges still apply.
+
 ## Redshift Serverless and networking
 
 Redshift Serverless removes server and cluster management, but the workgroup is
@@ -64,17 +86,18 @@ Query Editor / Step Functions / Lambda
               |
        Redshift Data API
               |
-private Redshift Serverless workgroup (4 base RPU)
+private Redshift Serverless workgroup (4 base and maximum RPU)
               |
      free S3 gateway endpoint
               |
-same-Region Silver and staging buckets
+same-Region Silver bucket
 ```
 
-The workgroup will use private subnets, `publicly_accessible = false`, Enhanced
-VPC Routing, and a security group that accepts TCP/5439 only from approved
-workload security groups. VPCs, subnets, route tables, security groups, and the
-S3 gateway endpoint have no hourly charge.
+The workgroup uses three private subnets, `publicly_accessible = false`,
+Enhanced VPC Routing, TLS-required connections, and a security group with no
+ingress rules. Query Editor v2 and automation use the Data API, so no JDBC rule
+is needed. VPCs, subnets, route tables, security groups, and the S3 gateway
+endpoint have no hourly charge.
 
 No NAT gateway or interface endpoint is created by default. Callers outside the
 VPC use the Redshift Data API. A paid Data API interface endpoint is justified
@@ -82,10 +105,21 @@ only if a VPC-attached caller must keep API traffic entirely private. Direct
 JDBC from a workstation requires an approved private network path and is not
 part of the cheapest initial design.
 
-When enabled, Redshift Serverless will default to the Ohio-supported minimum of
-4 base RPU plus maximum-capacity and RPU-hour usage limits. It bills compute
-while queries run and managed storage separately, so it remains disabled until
-an analytics consumer is ready.
+The workgroup uses the Ohio-supported minimum of 4 RPU for both base and maximum
+capacity. AWS's default Balanced AI-driven price-performance scaling is
+explicitly disabled because it can allocate billable extra compute and is not
+recommended for 4-RPU workgroups. A monthly `deactivate` usage limit stops user queries at 16 aggregate
+RPU-hours, approximately $6 of compute at the current $0.375/RPU-hour example
+rate. Redshift bills managed storage and CloudWatch logs separately, and even
+an empty namespace uses a small amount of managed storage. The account's $10
+AWS Budget will be an alert rather than a hard cap once a private notification
+address is supplied.
+
+Gold marts live in native Redshift tables. Redshift can load curated Silver
+objects through the free S3 gateway endpoint. Direct Spectrum/Glue access to
+Silver Iceberg is intentionally deferred: with Enhanced VPC Routing, that path
+may require a NAT gateway or paid Glue interface endpoint. It must be tested
+and cost-reviewed before being enabled.
 
 References:
 
@@ -94,13 +128,31 @@ References:
 - [Enhanced VPC Routing](https://docs.aws.amazon.com/redshift/latest/mgmt/enhanced-vpc-enabling-cluster.html)
 - [Data API VPC endpoints](https://docs.aws.amazon.com/redshift/latest/mgmt/data-api-vpc-endpoint.html)
 
+## Guardrails that keep an idle platform idle
+
+Cost control is enforced in IAM, not only in review. Both the deployment role
+and the DataEngineer permission sets are denied outside `us-east-2`, so nothing
+can be created in an unmonitored region. The deployment role is additionally
+denied every hourly-billed network and compute primitive: NAT, internet,
+transit, and VPN gateways, Elastic IPs, VPC peering, EBS volumes, EC2
+instances, and billed interface endpoints. The free S3 gateway endpoint is
+explicitly still allowed.
+
+CloudTrail is deliberately configured for the cheap half of its pricing model:
+one organization trail, management events only, no CloudWatch Logs delivery,
+no data events unless a named Terraform state bucket is passed in, SSE-S3
+rather than a monthly customer-managed key, and a 365-day lifecycle expiry so
+storage cannot grow without bound.
+
+Redshift, Glue, and Lambda create log groups on first use with unlimited
+retention. `scripts/enforce-log-retention.sh` runs after every apply and
+applies the environment's retention to any group AWS created implicitly, so no
+log group bills forever.
+
 ## Controls to add before production workloads
 
 - AWS Budgets with email alerts at small absolute thresholds per account.
 - Cost Anomaly Detection for the organization payer.
-- Athena workgroup scanned-byte limits and query-result expiration.
-- Redshift Serverless RPU-hour limits before enabling the workgroup.
-- CloudWatch retention on every workload-created log group.
 - Review measured S3 usage before adding paid storage transitions.
 
 Do not add NAT gateways, blanket interface endpoints, speculative secrets,

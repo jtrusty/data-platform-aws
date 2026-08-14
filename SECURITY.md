@@ -2,8 +2,9 @@
 
 > Status: state, GitHub OIDC bootstrap, deployment boundaries, and Identity
 > Center access are applied and verified in AWS. The first S3, SQS, DynamoDB,
-> and runtime-IAM foundation is live and drift-free in sandbox and development;
-> production remains intentionally undeployed.
+> and runtime-IAM foundation is live and drift-free in sandbox and development.
+> Athena, the private analytics VPC, and Redshift are implemented and locally
+> verified but not yet promoted; production remains intentionally undeployed.
 
 ## Trust boundary
 
@@ -48,6 +49,12 @@ sets provide broad platform operations without
 `AdministratorAccess`, `PowerUserAccess`, IAM mutation, account/Organizations
 administration, network-policy mutation, or KMS administration.
 
+Query Editor v2 access uses a customer-managed owner-only `sqlworkbench`
+policy. It deliberately excludes the AWS-managed policy's password-secret
+permissions, so Query Editor cannot create or retrieve `sqlworkbench!*`
+Secrets Manager secrets. Connections use temporary IAM credentials, while
+engineers retain access only to `data-platform/{environment}/*` secrets.
+
 Some AWS create APIs cannot be resource-scoped. Those exceptions will require
 platform name prefixes and request tags where supported, and will be documented
 in the policy. Authorization must not rely solely on mutable tags.
@@ -83,8 +90,8 @@ The initial runtime roles are:
 - `DataPlatformOrchestrationRole`: invoke approved Lambda functions and start
   approved Glue, Athena, SQS, and Redshift Data API operations. It has no broad
   data-plane access by default.
-- `DataPlatformRedshiftRole`: Silver Iceberg, Glue Catalog, approved staging
-  paths, and required KMS cryptographic use.
+- `DataPlatformRedshiftRole`: read-only Silver objects and Glue Catalog
+  metadata for approved Redshift loads.
 
 Four shared roles intentionally trade per-function isolation for a model a small
 team can understand. A new role is warranted only for a meaningful trust
@@ -129,18 +136,19 @@ with the configured bucket mode.
 
 ## Network flows
 
-Redshift Serverless will use private subnets and
-`publicly_accessible = false`. Its security group will allow TCP/5439 only from
-explicit workload security-group references, never IPv4 or IPv6 world CIDRs.
-Enhanced VPC Routing and an S3 gateway endpoint will serve same-Region lake
-access. Query Editor and non-VPC workloads will use the Redshift Data API, so
-the initial design needs neither a NAT gateway nor a paid Data API interface
-endpoint.
+Redshift Serverless uses three private subnets and
+`publicly_accessible = false`. Its dedicated security group has no ingress
+rules; Query Editor and non-VPC workloads use the Redshift Data API. Enhanced
+VPC Routing and a policy-restricted S3 gateway endpoint provide HTTPS read
+access to the exact same-account Silver bucket. There is no internet gateway,
+NAT gateway, public IP, IPv6 allocation, paid interface endpoint, or default
+route. A later JDBC flow must add TCP/5439 from an exact workload security-group
+reference, never an IPv4 or IPv6 world CIDR.
 
 Lambda remains outside the VPC unless a function needs a private resource. The
-initial private network will use S3 and DynamoDB gateway endpoints and no NAT
-gateway. Interface endpoints are added only when their hourly cost and required
-private flow are justified.
+initial private network uses only the free S3 gateway endpoint. Interface
+endpoints and NAT are added only when their hourly cost and required private
+flow are justified.
 
 ## Terraform and developer self-service
 
@@ -210,11 +218,72 @@ public and avoid nonsensitive outputs that reveal more architecture than needed.
 - No NAT gateway or blanket interface endpoints are created by default. This
   reduces cost and complexity but requires an explicit change when a private
   workload needs additional service connectivity.
+- Redshift uses its AWS-owned encryption key to avoid another monthly KMS-key
+  charge. This can produce a Security Hub recommendation for customer-managed
+  encryption; the cost-focused v1 tradeoff is accepted and documented.
+- Redshift Gold uses native tables loaded from curated Silver objects. Direct
+  Spectrum access to the Glue/Iceberg catalog is deferred because private
+  Enhanced VPC Routing may require a paid Glue endpoint or NAT.
+- The GitHub deployment role is the passwordless initial Redshift database
+  administrator. Immediately after each apply, the same short-lived role runs
+  the idempotent database bootstrap that grants a non-superuser
+  `data_engineer` database role to the exact Identity Center role. No persistent
+  database credential or secret is created. The bootstrap also revokes the
+  default `CREATE` privilege on the `public` schema from `PUBLIC`, preventing
+  other IAM-mapped runtime identities from creating Gold objects implicitly.
+- A bootstrap-managed inline policy explicitly denies the production deployment
+  role from deleting the namespace or workgroup. Intentional removal requires a
+  PlatformAdmin to take a snapshot and deliberately remove that deletion guard
+  first because the provider has no final-snapshot-on-destroy setting for
+  Serverless namespaces.
+
+## Audit logging
+
+One organization CloudTrail records management events in every account and
+region, with log file validation enabled, delivering to a dedicated
+management-account bucket that blocks public access, denies non-TLS access, and
+expires objects after a year. Only that trail may write to it. Object-level
+data events are off by default because they bill per event; the module accepts
+Terraform state bucket ARNs when an investigation needs object-level state
+access history.
+
+Detective controls that bill while idle -- GuardDuty, AWS Config, VPC flow
+logs, and CloudWatch alarms -- are deliberately not enabled at this stage. The
+trail is the account-level record; workload-level detection is a later,
+explicitly cost-reviewed decision.
+
+## Region and billed-resource guardrails
+
+The deployment role, the runtime permissions boundary, and both DataEngineer
+permission sets deny any action outside `us-east-2`, exempting only the global
+endpoints (IAM, STS, Organizations, account, support, and Identity Center) that
+do not populate `aws:RequestedRegion`. An unused region is an unmonitored
+region, and this is the cheapest place to stop that.
+
+The deployment role is separately denied creation of NAT, internet, egress-only,
+transit, and VPN gateways, Elastic IP allocation and association, VPC peering,
+EBS volumes, EC2 instances, and interface or Gateway Load Balancer endpoints.
+The deny is conditioned on endpoint type so the free S3 gateway endpoint keeps
+working. These denies live in a separate attached policy rather than the
+permissions boundary because an explicit Deny applies from any attached policy
+and the boundary must stay inside the 6,144-character managed-policy quota.
+
+Engineers may broadly operate platform resources but cannot delete or update the
+Terraform-owned Athena workgroup that enforces the per-query scan cutoff, or the
+Bronze and Silver catalog databases.
 
 ## Verification methodology
 
-Pull requests run formatting, Terraform validation and tests, TFLint, Trivy
-configuration scanning, and Trivy secret scanning. Terraform tests use mocked
+Pull requests run formatting, Terraform validation and tests, TFLint,
+actionlint, module documentation checks, shell script tests against a stubbed
+AWS CLI, Trivy configuration scanning, and Trivy secret scanning. Same-repository
+pull requests also plan sandbox, development, and production with read-only
+roles. A scheduled job plans every environment daily and fails on drift.
+
+Production apply recomputes the fingerprint of its planned resource changes and
+refuses to apply anything other than the diff that was reviewed in the
+`production-plan` job. Plan files themselves are never uploaded as workflow
+artifacts, because artifacts of a public repository are world-readable. Terraform tests use mocked
 providers and focus on high-impact invariants rather than hundreds of shallow
 assertions.
 

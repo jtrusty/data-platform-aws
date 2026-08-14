@@ -1,4 +1,5 @@
 locals {
+  catalog_prefix = replace(var.resource_prefix, "-", "_")
   runtime_trusted_services = {
     ingest        = ["glue.amazonaws.com", "lambda.amazonaws.com"]
     transform     = ["glue.amazonaws.com", "lambda.amazonaws.com"]
@@ -168,8 +169,8 @@ locals {
         ]
         Resource = [
           "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog",
-          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.resource_prefix}*",
-          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${var.resource_prefix}*/*",
+          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${local.catalog_prefix}*",
+          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${local.catalog_prefix}*/*",
         ]
       },
       {
@@ -185,7 +186,6 @@ locals {
         ]
         Resource = [
           "arn:aws:athena:${var.aws_region}:${var.aws_account_id}:datacatalog/AwsDataCatalog",
-          "arn:aws:athena:${var.aws_region}:${var.aws_account_id}:datacatalog/${var.resource_prefix}*",
           "arn:aws:athena:${var.aws_region}:${var.aws_account_id}:workgroup/${var.resource_prefix}-*",
         ]
       },
@@ -251,8 +251,8 @@ locals {
         Action = ["glue:GetDatabase", "glue:GetDatabases", "glue:GetPartition", "glue:GetPartitions", "glue:GetTable", "glue:GetTables"]
         Resource = [
           "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog",
-          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.resource_prefix}*",
-          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${var.resource_prefix}*/*",
+          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${local.catalog_prefix}*",
+          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${local.catalog_prefix}*/*",
         ]
       },
       {
@@ -316,8 +316,8 @@ locals {
         ]
         Resource = [
           "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:catalog",
-          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${var.resource_prefix}*",
-          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${var.resource_prefix}*/*",
+          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:database/${local.catalog_prefix}*",
+          "arn:aws:glue:${var.aws_region}:${var.aws_account_id}:table/${local.catalog_prefix}*/*",
         ]
       },
     ]
@@ -332,12 +332,21 @@ resource "aws_iam_role" "runtime" {
   permissions_boundary = var.permissions_boundary_arn
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Sid       = "TrustApprovedServices"
-      Effect    = "Allow"
-      Principal = { Service = each.value }
-      Action    = "sts:AssumeRole"
-    }]
+    Statement = [merge(
+      {
+        Sid       = "TrustApprovedServices"
+        Effect    = "Allow"
+        Principal = { Service = each.value }
+        Action    = "sts:AssumeRole"
+      },
+      each.key == "redshift" ? {
+        Condition = {
+          StringEquals = {
+            "aws:SourceAccount" = var.aws_account_id
+          }
+        }
+      } : {},
+    )]
   })
   tags = var.tags
 }

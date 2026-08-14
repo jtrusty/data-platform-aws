@@ -135,3 +135,45 @@ variable "secret_names" {
   type        = set(string)
   default     = []
 }
+
+variable "analytics_availability_zones" {
+  description = "Three distinct Ohio availability zones for private Redshift Serverless."
+  type        = list(string)
+  default     = ["us-east-2a", "us-east-2b", "us-east-2c"]
+}
+
+variable "athena_bytes_scanned_cutoff_per_query" {
+  description = "Hard bytes-scanned limit for one Athena query."
+  type        = number
+  default     = 10737418240
+}
+
+variable "redshift_base_capacity" {
+  description = "Redshift Serverless base capacity in RPUs."
+  type        = number
+  default     = 4
+}
+
+variable "redshift_max_capacity" {
+  description = "Redshift Serverless maximum capacity in RPUs."
+  type        = number
+  default     = 4
+}
+
+variable "redshift_monthly_rpu_hours" {
+  description = "Monthly Redshift compute hard limit in RPU-hours."
+  type        = number
+  default     = 16
+}
+
+variable "redshift_max_query_execution_seconds" {
+  description = "Maximum execution time for an individual Redshift query."
+  type        = number
+  default     = 900
+}
+
+variable "redshift_log_retention_days" {
+  description = "CloudWatch retention for Redshift audit logs."
+  type        = number
+  default     = 7
+}

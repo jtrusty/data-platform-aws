@@ -29,3 +29,8 @@ output "state_bucket_name" {
   description = "Sandbox state bucket."
   value       = module.account_bootstrap.state_bucket_name
 }
+
+output "terraform_plan_role_arn" {
+  description = "GitHub Actions read-only plan role for sandbox."
+  value       = module.account_bootstrap.plan_role_arn
+}
