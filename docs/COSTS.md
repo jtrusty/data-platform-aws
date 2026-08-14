@@ -56,9 +56,9 @@ Current official pricing references:
 | Secret recovery window | Immediate | 7 days | 30 days |
 
 Bronze and Silver current objects do not expire automatically. Landing data,
-reproducible Athena results, and old deployment artifacts do. Bronze and
-artifact buckets retain object versions in every environment; production also
-versions Silver for recovery, while nonproduction relies on reproducibility and
+reproducible Athena results, and old deployment artifacts do. Bronze, Silver,
+and artifact buckets retain object versions in every environment, so a mistaken
+delete leaves a recoverable version everywhere curated data lives, alongside
 Iceberg snapshot maintenance. These are starting points to adjust from observed
 volume and recovery requirements.
 
