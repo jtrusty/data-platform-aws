@@ -58,6 +58,7 @@ jobs:
       - name: Detect ${{ matrix.environment }} drift
         env:
           ENVIRONMENT: ${{ matrix.environment }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: |
           root="infra/environments/${ENVIRONMENT}"
           terraform -chdir="$root" init -input=false -backend-config=backend.hcl

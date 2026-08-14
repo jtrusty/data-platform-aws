@@ -3,6 +3,8 @@ locals {
   # must exempt them or every IAM and STS call fails.
   global_service_not_actions = [
     "account:*",
+    "budgets:*",
+    "ce:*",
     "iam:*",
     "organizations:*",
     "s3:GetAccountPublicAccessBlock",
@@ -75,8 +77,13 @@ locals {
 
   platform_service_actions = [
     "athena:*",
+    "budgets:*",
     "cloudwatch:*",
+    "config:*",
     "dynamodb:*",
+    "guardduty:*",
+    "securityhub:*",
+    "sns:*",
     "ec2:*",
     "glue:*",
     "lambda:*",
@@ -190,35 +197,16 @@ locals {
       Resource = "arn:aws:iam::${var.account_id}:role/data-platform/runtime/${local.role_prefix}-*"
     },
     {
-      Sid    = "ManageRuntimePolicies"
-      Effect = "Allow"
-      Action = [
-        "iam:CreatePolicy", "iam:CreatePolicyVersion", "iam:DeletePolicy", "iam:DeletePolicyVersion",
-        "iam:GetPolicy", "iam:GetPolicyVersion", "iam:ListPolicyTags", "iam:ListPolicyVersions",
-        "iam:SetDefaultPolicyVersion", "iam:TagPolicy", "iam:UntagPolicy",
-      ]
-      Resource = "arn:aws:iam::${var.account_id}:policy/data-platform/runtime/${local.role_prefix}-*"
-    },
-    {
       Sid      = "ReadIAM"
       Effect   = "Allow"
       Action   = ["iam:Get*", "iam:List*"]
       Resource = "*"
     },
     {
-      Sid      = "PassIngestRole"
+      Sid      = "PassIngestAndTransformRoles"
       Effect   = "Allow"
       Action   = ["iam:PassRole"]
-      Resource = [local.runtime_role_arns.ingest]
-      Condition = {
-        StringEquals = { "iam:PassedToService" = ["glue.amazonaws.com", "lambda.amazonaws.com"] }
-      }
-    },
-    {
-      Sid      = "PassTransformRole"
-      Effect   = "Allow"
-      Action   = ["iam:PassRole"]
-      Resource = [local.runtime_role_arns.transform]
+      Resource = [local.runtime_role_arns.ingest, local.runtime_role_arns.transform]
       Condition = {
         StringEquals = { "iam:PassedToService" = ["glue.amazonaws.com", "lambda.amazonaws.com"] }
       }
@@ -239,6 +227,24 @@ locals {
       Resource = [local.runtime_role_arns.redshift]
       Condition = {
         StringEquals = { "iam:PassedToService" = ["redshift-serverless.amazonaws.com"] }
+      }
+    },
+    {
+      Sid      = "PassSpendGuardRole"
+      Effect   = "Allow"
+      Action   = ["iam:PassRole"]
+      Resource = ["arn:aws:iam::${var.account_id}:role/data-platform/runtime/${local.role_prefix}-athena-guard"]
+      Condition = {
+        StringEquals = { "iam:PassedToService" = ["lambda.amazonaws.com"] }
+      }
+    },
+    {
+      Sid      = "PassConfigRecorderRole"
+      Effect   = "Allow"
+      Action   = ["iam:PassRole"]
+      Resource = ["arn:aws:iam::${var.account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"]
+      Condition = {
+        StringEquals = { "iam:PassedToService" = ["config.amazonaws.com"] }
       }
     },
     {

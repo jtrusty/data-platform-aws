@@ -80,9 +80,20 @@ variable "versioned_bucket_purposes" {
   validation {
     condition = alltrue([
       for purpose in var.versioned_bucket_purposes :
-      contains(["landing", "bronze", "silver", "artifacts", "athena-results"], purpose)
+      contains(["landing", "bronze", "silver", "artifacts", "athena-results", "config", "flow-logs"], purpose)
     ])
     error_message = "versioned_bucket_purposes contains an unknown platform bucket purpose."
+  }
+}
+
+variable "audit_log_expiration_days" {
+  description = "Days to retain AWS Config snapshots and VPC flow log records."
+  type        = number
+  default     = 90
+
+  validation {
+    condition     = var.audit_log_expiration_days >= 7 && var.audit_log_expiration_days <= 3650
+    error_message = "audit_log_expiration_days must be between 7 days and 10 years."
   }
 }
 

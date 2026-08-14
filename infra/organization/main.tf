@@ -20,7 +20,9 @@ module "identity_center_access" {
 module "organization_audit" {
   source = "../modules/organization_audit"
 
-  tags = local.tags
+  alert_email        = var.alert_email
+  monthly_budget_usd = var.monthly_budget_usd
+  tags               = local.tags
 }
 
 output "permission_set_arns" {
@@ -36,4 +38,9 @@ output "audit_bucket_name" {
 output "organization_trail_arn" {
   description = "Organization CloudTrail ARN covering every member account."
   value       = module.organization_audit.trail_arn
+}
+
+output "organization_alert_topic_arn" {
+  description = "SNS topic receiving management-account budget alerts."
+  value       = module.organization_audit.alert_topic_arn
 }

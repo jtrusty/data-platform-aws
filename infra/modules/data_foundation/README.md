@@ -17,7 +17,9 @@
 | Name | Type |
 |------|------|
 | [aws_dynamodb_table.metadata](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/dynamodb_table) | resource |
+| [aws_iam_role.athena_guard](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role.runtime](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
+| [aws_iam_role_policy.athena_guard](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_iam_role_policy.runtime](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_secretsmanager_secret.platform](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/secretsmanager_secret) | resource |
 | [aws_sqs_queue.dead_letter](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/sqs_queue) | resource |
@@ -32,6 +34,7 @@
 |------|-------------|------|---------|:--------:|
 | <a name="input_artifact_expiration_days"></a> [artifact\_expiration\_days](#input\_artifact\_expiration\_days) | Days to retain current deployment artifacts. | `number` | `30` | no |
 | <a name="input_athena_results_expiration_days"></a> [athena\_results\_expiration\_days](#input\_athena\_results\_expiration\_days) | Days to retain reproducible Athena query results. | `number` | `7` | no |
+| <a name="input_audit_log_expiration_days"></a> [audit\_log\_expiration\_days](#input\_audit\_log\_expiration\_days) | Days to retain AWS Config snapshots and VPC flow log records. | `number` | `90` | no |
 | <a name="input_aws_account_id"></a> [aws\_account\_id](#input\_aws\_account\_id) | AWS account that owns the environment foundation. | `string` | n/a | yes |
 | <a name="input_aws_region"></a> [aws\_region](#input\_aws\_region) | AWS region containing the environment foundation. | `string` | `"us-east-2"` | no |
 | <a name="input_dlq_message_retention_seconds"></a> [dlq\_message\_retention\_seconds](#input\_dlq\_message\_retention\_seconds) | Retention period for failed messages in dead-letter queues. | `number` | `1209600` | no |
@@ -58,9 +61,11 @@
 
 | Name | Description |
 |------|-------------|
+| <a name="output_athena_guard_role_arn"></a> [athena\_guard\_role\_arn](#output\_athena\_guard\_role\_arn) | Execution role for the Athena monthly spend guard. |
 | <a name="output_bucket_arns"></a> [bucket\_arns](#output\_bucket\_arns) | Platform bucket ARNs keyed by storage purpose. |
 | <a name="output_bucket_names"></a> [bucket\_names](#output\_bucket\_names) | Platform bucket names keyed by storage purpose. |
 | <a name="output_dead_letter_queue_arns"></a> [dead\_letter\_queue\_arns](#output\_dead\_letter\_queue\_arns) | Dead-letter queue ARNs keyed by workflow boundary. |
+| <a name="output_dead_letter_queue_names"></a> [dead\_letter\_queue\_names](#output\_dead\_letter\_queue\_names) | Dead-letter queue names for alarm wiring. |
 | <a name="output_dead_letter_queue_urls"></a> [dead\_letter\_queue\_urls](#output\_dead\_letter\_queue\_urls) | Dead-letter queue URLs keyed by workflow boundary. |
 | <a name="output_metadata_table_arn"></a> [metadata\_table\_arn](#output\_metadata\_table\_arn) | Platform metadata and watermark table ARN. |
 | <a name="output_metadata_table_name"></a> [metadata\_table\_name](#output\_metadata\_table\_name) | Platform metadata and watermark table name. |

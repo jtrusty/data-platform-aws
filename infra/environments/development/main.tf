@@ -8,11 +8,12 @@ provider "aws" {
 }
 
 locals {
-  environment          = "development"
-  resource_prefix      = "data-platform-${local.environment}"
-  secret_namespace     = "data-platform/${local.environment}"
-  vpc_cidr             = "10.50.0.0/16"
-  runtime_boundary_arn = "arn:aws:iam::${var.aws_account_id}:policy/bootstrap/jtrusty-data-platform-runtime-boundary-${local.environment}"
+  environment              = "development"
+  resource_prefix          = "data-platform-${local.environment}"
+  secret_namespace         = "data-platform/${local.environment}"
+  vpc_cidr                 = "10.50.0.0/16"
+  runtime_boundary_arn     = "arn:aws:iam::${var.aws_account_id}:policy/bootstrap/jtrusty-data-platform-runtime-boundary-${local.environment}"
+  config_recorder_role_arn = "arn:aws:iam::${var.aws_account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
 
   tags = {
     Environment = local.environment
@@ -33,6 +34,7 @@ module "data_foundation" {
   secret_namespace                   = local.secret_namespace
   permissions_boundary_arn           = local.runtime_boundary_arn
   force_destroy_buckets              = var.force_destroy_buckets
+  audit_log_expiration_days          = var.audit_log_expiration_days
   landing_expiration_days            = var.landing_expiration_days
   athena_results_expiration_days     = var.athena_results_expiration_days
   artifact_expiration_days           = var.artifact_expiration_days
@@ -80,4 +82,36 @@ module "private_redshift" {
   max_query_execution_seconds = var.redshift_max_query_execution_seconds
   log_retention_days          = var.redshift_log_retention_days
   tags                        = local.tags
+}
+
+# Budget notifications and the Athena spend guard. AWS Budgets only notifies, so
+# the guard function is what actually stops the platform's most open-ended cost.
+module "platform_observability" {
+  source = "../../modules/platform_observability"
+
+  aws_account_id             = var.aws_account_id
+  environment                = local.environment
+  resource_prefix            = local.resource_prefix
+  alert_email                = var.alert_email
+  monthly_budget_usd         = var.monthly_budget_usd
+  athena_workgroup_name      = module.athena_analytics.workgroup_name
+  athena_monthly_bytes_limit = var.athena_monthly_bytes_limit
+  dead_letter_queue_names    = toset(values(module.data_foundation.dead_letter_queue_names))
+  guard_role_arn             = module.data_foundation.athena_guard_role_arn
+  log_retention_days         = var.guard_log_retention_days
+  tags                       = local.tags
+}
+
+module "platform_detection" {
+  source = "../../modules/platform_detection"
+
+  aws_account_id           = var.aws_account_id
+  environment              = local.environment
+  resource_prefix          = local.resource_prefix
+  config_bucket_id         = module.data_foundation.bucket_names["config"]
+  flow_log_bucket_arn      = module.data_foundation.bucket_arns["flow-logs"]
+  vpc_id                   = module.private_redshift.vpc_id
+  config_recorder_role_arn = local.config_recorder_role_arn
+  enable_security_hub      = var.enable_security_hub
+  tags                     = local.tags
 }

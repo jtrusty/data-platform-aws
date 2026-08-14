@@ -361,3 +361,52 @@ resource "aws_iam_role_policy" "runtime" {
     Statement = local.runtime_policy_statements[each.key]
   })
 }
+
+# The Athena spend guard is a platform control rather than a data-plane role, so
+# it is defined separately from the four responsibility-based runtime roles.
+resource "aws_iam_role" "athena_guard" {
+  name                 = "${var.resource_prefix}-athena-guard"
+  path                 = "/data-platform/runtime/"
+  permissions_boundary = var.permissions_boundary_arn
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid       = "TrustLambda"
+      Effect    = "Allow"
+      Principal = { Service = "lambda.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+      Condition = {
+        StringEquals = { "aws:SourceAccount" = var.aws_account_id }
+      }
+    }]
+  })
+  tags = var.tags
+}
+
+resource "aws_iam_role_policy" "athena_guard" {
+  name = "${var.resource_prefix}-athena-guard"
+  role = aws_iam_role.athena_guard.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid      = "ReadAthenaSpendMetrics"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics"]
+        Resource = "*"
+      },
+      {
+        Sid      = "DisableOverspendingWorkgroup"
+        Effect   = "Allow"
+        Action   = ["athena:GetWorkGroup", "athena:UpdateWorkGroup"]
+        Resource = "arn:aws:athena:${var.aws_region}:${var.aws_account_id}:workgroup/${var.resource_prefix}-*"
+      },
+      {
+        Sid      = "WriteSpendGuardLogs"
+        Effect   = "Allow"
+        Action   = ["logs:CreateLogGroup", "logs:CreateLogStream", "logs:PutLogEvents"]
+        Resource = local.lambda_log_arns
+      },
+    ]
+  })
+}

@@ -5,6 +5,8 @@ locals {
     "silver",
     "artifacts",
     "athena-results",
+    "config",
+    "flow-logs",
   ])
   bucket_current_expiration = {
     landing        = var.landing_expiration_days
@@ -12,6 +14,24 @@ locals {
     silver         = null
     artifacts      = var.artifact_expiration_days
     athena-results = var.athena_results_expiration_days
+    config         = var.audit_log_expiration_days
+    flow-logs      = var.audit_log_expiration_days
+  }
+
+  # AWS Config and VPC flow logs deliver with their own service credentials, so
+  # those buckets need an explicit service grant that the data buckets must not
+  # have.
+  bucket_log_delivery = {
+    config = {
+      account_id        = var.aws_account_id
+      service_principal = "config.amazonaws.com"
+      prefix            = "config/"
+    }
+    flow-logs = {
+      account_id        = var.aws_account_id
+      service_principal = "delivery.logs.amazonaws.com"
+      prefix            = ""
+    }
   }
   queue_names = toset(["ingest", "bronze-complete"])
   queue_arns = {
@@ -35,6 +55,7 @@ module "platform_bucket" {
   force_destroy         = var.force_destroy_buckets
   noncurrent_expiration = var.noncurrent_version_expiration_days
   versioning_enabled    = contains(var.versioned_bucket_purposes, each.key)
+  log_delivery          = lookup(local.bucket_log_delivery, each.key, null)
   tags                  = merge(var.tags, { Purpose = each.key })
 }
 

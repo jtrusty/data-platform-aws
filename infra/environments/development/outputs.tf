@@ -50,3 +50,26 @@ output "analytics" {
     vpc_id                     = module.private_redshift.vpc_id
   }
 }
+
+output "spend_controls" {
+  description = "Budget, Athena limit, and alarm configuration for development."
+  value = {
+    alert_email_subscribed     = module.platform_observability.alert_email_subscribed
+    alert_topic_arn            = module.platform_observability.alert_topic_arn
+    alarm_names                = module.platform_observability.alarm_names
+    athena_monthly_bytes_limit = module.platform_observability.athena_monthly_bytes_limit
+    athena_spend_guard         = module.platform_observability.athena_spend_guard_function_name
+    monthly_budget_usd         = module.platform_observability.monthly_budget_usd
+  }
+}
+
+output "detection" {
+  description = "Detective controls protecting development."
+  value = {
+    config_recorder_name  = module.platform_detection.config_recorder_name
+    config_resource_types = module.platform_detection.config_resource_types
+    guardduty_detector_id = module.platform_detection.guardduty_detector_id
+    flow_log_id           = module.platform_detection.flow_log_id
+    security_hub_enabled  = module.platform_detection.security_hub_enabled
+  }
+}

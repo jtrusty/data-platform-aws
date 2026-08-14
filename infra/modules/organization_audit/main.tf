@@ -1,7 +1,11 @@
 locals {
-  bucket_name = "jtrusty-dp-audit-${var.management_account_id}-us-east-2"
-  bucket_arn  = "arn:aws:s3:::${local.bucket_name}"
-  trail_arn   = "arn:aws:cloudtrail:us-east-2:${var.management_account_id}:trail/${var.trail_name}"
+  bucket_name              = "jtrusty-dp-audit-${var.management_account_id}-us-east-2"
+  topic_name               = "jtrusty-data-platform-organization-alerts"
+  topic_arn                = "arn:aws:sns:us-east-2:${var.management_account_id}:jtrusty-data-platform-organization-alerts"
+  config_prefix            = "config"
+  bucket_arn               = "arn:aws:s3:::${local.bucket_name}"
+  trail_arn                = "arn:aws:cloudtrail:us-east-2:${var.management_account_id}:trail/${var.trail_name}"
+  config_recorder_role_arn = "arn:aws:iam::${var.management_account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
 }
 
 data "aws_organizations_organization" "current" {}
@@ -97,6 +101,26 @@ resource "aws_s3_bucket_policy" "audit" {
         }
       },
       {
+        Sid       = "AWSConfigAclCheck"
+        Effect    = "Allow"
+        Principal = { Service = "config.amazonaws.com" }
+        Action    = ["s3:GetBucketAcl", "s3:ListBucket"]
+        Resource  = local.bucket_arn
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = var.management_account_id }
+        }
+      },
+      {
+        Sid       = "AWSConfigWrite"
+        Effect    = "Allow"
+        Principal = { Service = "config.amazonaws.com" }
+        Action    = "s3:PutObject"
+        Resource  = "${local.bucket_arn}/${local.config_prefix}/*"
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = var.management_account_id }
+        }
+      },
+      {
         Sid       = "AWSCloudTrailAclCheck"
         Effect    = "Allow"
         Principal = { Service = "cloudtrail.amazonaws.com" }
@@ -151,4 +175,155 @@ resource "aws_cloudtrail" "organization" {
   }
 
   depends_on = [aws_s3_bucket_policy.audit]
+}
+
+resource "aws_iam_service_linked_role" "detection" {
+  for_each = var.manage_detective_service_linked_roles ? toset(["config.amazonaws.com", "guardduty.amazonaws.com", "securityhub.amazonaws.com"]) : toset([])
+
+  aws_service_name = each.value
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
+# Alerts carry no sensitive data, and the AWS-managed SNS key has no monthly
+# charge where a customer-managed key would add one per account.
+#trivy:ignore:AVD-AWS-0136:exp:2027-08-13
+resource "aws_sns_topic" "alerts" {
+  name              = local.topic_name
+  kms_master_key_id = "alias/aws/sns"
+  tags              = merge(var.tags, { Purpose = "organization-alerts" })
+}
+
+resource "aws_sns_topic_policy" "alerts" {
+  arn = aws_sns_topic.alerts.arn
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid       = "AllowAccountOwnerAdministration"
+        Effect    = "Allow"
+        Principal = { AWS = "arn:aws:iam::${var.management_account_id}:root" }
+        Action    = ["sns:GetTopicAttributes", "sns:SetTopicAttributes", "sns:Subscribe", "sns:Publish", "sns:ListSubscriptionsByTopic"]
+        Resource  = local.topic_arn
+      },
+      {
+        Sid       = "AllowBudgetPublishing"
+        Effect    = "Allow"
+        Principal = { Service = "budgets.amazonaws.com" }
+        Action    = "sns:Publish"
+        Resource  = local.topic_arn
+        Condition = {
+          StringEquals = { "aws:SourceAccount" = var.management_account_id }
+        }
+      },
+      {
+        Sid       = "DenyInsecureTransport"
+        Effect    = "Deny"
+        Principal = "*"
+        Action    = "sns:Publish"
+        Resource  = local.topic_arn
+        Condition = {
+          Bool = { "aws:SecureTransport" = "false" }
+        }
+      },
+    ]
+  })
+}
+
+resource "aws_sns_topic_subscription" "alert_email" {
+  count = var.alert_email == null ? 0 : 1
+
+  topic_arn = aws_sns_topic.alerts.arn
+  protocol  = "email"
+  endpoint  = var.alert_email
+}
+
+resource "aws_budgets_budget" "management" {
+  name         = "jtrusty-data-platform-management-monthly"
+  budget_type  = "COST"
+  limit_amount = tostring(var.monthly_budget_usd)
+  limit_unit   = "USD"
+  time_unit    = "MONTHLY"
+
+  dynamic "notification" {
+    for_each = toset([50, 80, 100])
+
+    content {
+      comparison_operator       = "GREATER_THAN"
+      notification_type         = "ACTUAL"
+      threshold                 = notification.value
+      threshold_type            = "PERCENTAGE"
+      subscriber_sns_topic_arns = [aws_sns_topic.alerts.arn]
+    }
+  }
+
+  notification {
+    comparison_operator       = "GREATER_THAN"
+    notification_type         = "FORECASTED"
+    threshold                 = 100
+    threshold_type            = "PERCENTAGE"
+    subscriber_sns_topic_arns = [aws_sns_topic.alerts.arn]
+  }
+
+  depends_on = [aws_sns_topic_policy.alerts]
+}
+
+resource "aws_guardduty_detector" "management" {
+  enable                       = true
+  finding_publishing_frequency = "SIX_HOURS"
+  tags                         = merge(var.tags, { Purpose = "threat-detection" })
+
+  depends_on = [aws_iam_service_linked_role.detection]
+}
+
+resource "aws_config_configuration_recorder" "management" {
+  name     = "jtrusty-data-platform-management-recorder"
+  role_arn = local.config_recorder_role_arn
+
+  recording_group {
+    all_supported                 = false
+    include_global_resource_types = false
+    resource_types                = var.config_resource_types
+  }
+
+  depends_on = [aws_iam_service_linked_role.detection]
+}
+
+resource "aws_config_delivery_channel" "management" {
+  name           = "jtrusty-data-platform-management-delivery"
+  s3_bucket_name = aws_s3_bucket.audit.id
+  s3_key_prefix  = local.config_prefix
+
+  snapshot_delivery_properties {
+    delivery_frequency = "TwentyFour_Hours"
+  }
+
+  depends_on = [aws_config_configuration_recorder.management, aws_s3_bucket_policy.audit]
+}
+
+resource "aws_config_configuration_recorder_status" "management" {
+  name       = aws_config_configuration_recorder.management.name
+  is_enabled = true
+
+  depends_on = [aws_config_delivery_channel.management]
+}
+
+resource "aws_securityhub_account" "management" {
+  count = var.enable_security_hub ? 1 : 0
+
+  enable_default_standards  = false
+  control_finding_generator = "SECURITY_CONTROL"
+  auto_enable_controls      = true
+
+  depends_on = [aws_iam_service_linked_role.detection]
+}
+
+resource "aws_securityhub_standards_subscription" "foundational" {
+  count = var.enable_security_hub ? 1 : 0
+
+  standards_arn = "arn:aws:securityhub:us-east-2::standards/aws-foundational-security-best-practices/v/1.0.0"
+
+  depends_on = [aws_securityhub_account.management]
 }

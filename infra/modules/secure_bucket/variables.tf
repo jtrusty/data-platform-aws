@@ -65,6 +65,25 @@ variable "current_expiration" {
   }
 }
 
+variable "log_delivery" {
+  description = "Optional AWS log-delivery grant. AWS Config and VPC flow logs write with the service's own credentials, so the bucket policy must name the service principal and the owning account."
+  type = object({
+    account_id        = string
+    service_principal = string
+    prefix            = optional(string, "")
+  })
+  default  = null
+  nullable = true
+
+  validation {
+    condition = var.log_delivery == null ? true : (
+      can(regex("^[0-9]{12}$", var.log_delivery.account_id)) &&
+      contains(["config.amazonaws.com", "delivery.logs.amazonaws.com"], var.log_delivery.service_principal)
+    )
+    error_message = "log_delivery must name a 12-digit account and either the AWS Config or the log delivery service principal."
+  }
+}
+
 variable "tags" {
   description = "Resource tags. The platform boundary tags are mandatory."
   type        = map(string)

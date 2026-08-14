@@ -30,6 +30,7 @@ No modules.
 | <a name="input_current_expiration"></a> [current\_expiration](#input\_current\_expiration) | Optional number of days after which current objects expire. Null retains current objects. | `number` | `null` | no |
 | <a name="input_force_destroy"></a> [force\_destroy](#input\_force\_destroy) | Allow Terraform to delete a non-empty bucket. Keep false outside disposable tests. | `bool` | `false` | no |
 | <a name="input_kms_key_arn"></a> [kms\_key\_arn](#input\_kms\_key\_arn) | Optional ARN of the platform KMS key. Null uses no-additional-cost SSE-S3 encryption. | `string` | `null` | no |
+| <a name="input_log_delivery"></a> [log\_delivery](#input\_log\_delivery) | Optional AWS log-delivery grant. AWS Config and VPC flow logs write with the service's own credentials, so the bucket policy must name the service principal and the owning account. | <pre>object({<br/>    account_id        = string<br/>    service_principal = string<br/>    prefix            = optional(string, "")<br/>  })</pre> | `null` | no |
 | <a name="input_noncurrent_expiration"></a> [noncurrent\_expiration](#input\_noncurrent\_expiration) | Days to retain noncurrent object versions. | `number` | `90` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Resource tags. The platform boundary tags are mandatory. | `map(string)` | n/a | yes |
 | <a name="input_versioning_enabled"></a> [versioning\_enabled](#input\_versioning\_enabled) | Enable object versioning where recovery needs justify the additional storage. | `bool` | `true` | no |

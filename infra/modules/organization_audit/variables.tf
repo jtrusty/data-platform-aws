@@ -56,6 +56,54 @@ variable "state_bucket_data_events" {
   }
 }
 
+variable "alert_email" {
+  description = "Address subscribed to management-account budget alerts. Supplied out of band; never committed."
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+
+  validation {
+    condition     = var.alert_email == null ? true : can(regex("^[^@[:space:]]+@[^@[:space:]]+\\.[a-zA-Z]{2,}$", var.alert_email))
+    error_message = "alert_email must be null or a single valid email address."
+  }
+}
+
+variable "monthly_budget_usd" {
+  description = "Monthly cost budget for the management account."
+  type        = number
+  default     = 25
+
+  validation {
+    condition     = var.monthly_budget_usd >= 1 && var.monthly_budget_usd <= 1000
+    error_message = "monthly_budget_usd must be between 1 and 1000."
+  }
+}
+
+variable "enable_security_hub" {
+  description = "Enable Security Hub with the foundational standard in the management account."
+  type        = bool
+  default     = true
+}
+
+variable "manage_detective_service_linked_roles" {
+  description = "Create the management account's Config, GuardDuty, and Security Hub service-linked roles."
+  type        = bool
+  default     = true
+}
+
+variable "config_resource_types" {
+  description = "Resource types AWS Config records in the management account."
+  type        = set(string)
+  default = [
+    "AWS::CloudTrail::Trail",
+    "AWS::IAM::Policy",
+    "AWS::IAM::Role",
+    "AWS::KMS::Key",
+    "AWS::S3::Bucket",
+  ]
+}
+
 variable "tags" {
   description = "Mandatory organization audit tags."
   type        = map(string)

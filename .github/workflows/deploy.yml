@@ -96,6 +96,7 @@ jobs:
       - name: Plan ${{ matrix.environment }}
         env:
           ENVIRONMENT: ${{ matrix.environment }}
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: |
           terraform -chdir="infra/environments/${ENVIRONMENT}" init -input=false -backend-config=backend.hcl
           terraform -chdir="infra/environments/${ENVIRONMENT}" plan -input=false -lock=false
@@ -138,6 +139,8 @@ jobs:
         run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
 
       - name: Plan sandbox
+        env:
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: |
           terraform -chdir=infra/environments/sandbox init -input=false -backend-config=backend.hcl
           terraform -chdir=infra/environments/sandbox plan -input=false -out=sandbox.tfplan
@@ -189,6 +192,8 @@ jobs:
         run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
 
       - name: Plan development
+        env:
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: |
           terraform -chdir=infra/environments/development init -input=false -backend-config=backend.hcl
           terraform -chdir=infra/environments/development plan -input=false -out=development.tfplan
@@ -246,6 +251,8 @@ jobs:
         run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
 
       - name: Plan production
+        env:
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: |
           terraform -chdir=infra/environments/production init -input=false -backend-config=backend.hcl
           terraform -chdir=infra/environments/production plan -input=false -lock=false -out=production.tfplan
@@ -329,6 +336,8 @@ jobs:
         run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
 
       - name: Plan production apply
+        env:
+          TF_VAR_alert_email: ${{ secrets.ALERT_EMAIL }}
         run: |
           terraform -chdir=infra/environments/production init -input=false -backend-config=backend.hcl
           terraform -chdir=infra/environments/production plan -input=false -out=production.tfplan

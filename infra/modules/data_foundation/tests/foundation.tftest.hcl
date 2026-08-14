@@ -18,7 +18,7 @@ run "sandbox_uses_low_fixed_cost_defaults" {
   command = apply
 
   assert {
-    condition     = toset(keys(module.platform_bucket)) == toset(["landing", "bronze", "silver", "artifacts", "athena-results"])
+    condition     = toset(keys(module.platform_bucket)) == toset(["landing", "bronze", "silver", "artifacts", "athena-results", "config", "flow-logs"])
     error_message = "The foundation must create exactly five understandable storage boundaries, not a bucket per dataset."
   }
 
