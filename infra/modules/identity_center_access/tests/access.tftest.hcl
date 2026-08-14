@@ -142,6 +142,8 @@ run "data_engineer_has_no_admin_escape" {
   assert {
     condition = alltrue([
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectDurabilityAndRetention"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectCostControls"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectAgainstDataMovement"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectResourcePoliciesAndPublicAccess"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "ProtectResourcePoliciesAndPublicAccess"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectDevelopmentBaselineQueues"),
@@ -204,5 +206,28 @@ run "security_boundary_stays_with_terraform" {
       ])
     ])
     error_message = "Resource policies and public-access controls decide who can reach platform data and must stay Terraform-owned."
+  }
+}
+
+# Terraform owns bucket creation and the cost caps. An engineer-made Athena
+# workgroup would carry no per-query scan cutoff and would be invisible to the
+# monthly spend guard.
+run "cost_and_creation_controls_stay_with_terraform" {
+  command = plan
+
+  assert {
+    condition = alltrue(flatten([
+      for policy in [
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy),
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy),
+        ] : [
+        for denied in ["athena:CreateWorkGroup", "s3:CreateBucket", "s3:DeleteObjectVersion", "logs:PutSubscriptionFilter", "dynamodb:CreateTableReplica"] :
+        anytrue([
+          for statement in policy.Statement :
+          statement.Effect == "Deny" && contains(try(tolist(statement.Action), [statement.Action]), denied)
+        ])
+      ]
+    ]))
+    error_message = "Bucket creation, version deletion, cross-account log delivery, table replicas, and uncapped Athena workgroups must all stay denied."
   }
 }

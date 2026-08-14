@@ -286,9 +286,27 @@ working. These denies live in a separate attached policy rather than the
 permissions boundary because an explicit Deny applies from any attached policy
 and the boundary must stay inside the 6,144-character managed-policy quota.
 
-Engineers may broadly operate platform resources but cannot delete or update the
-Terraform-owned Athena workgroup that enforces the per-query scan cutoff, or the
-Bronze and Silver catalog databases.
+Engineers hold full service access to the platform's own resources -- Athena,
+DynamoDB, Glue, Lambda, CloudWatch Logs, SQS, Step Functions, S3, and Secrets
+Manager -- bounded by the environment-prefixed ARNs each statement is attached
+to. Enumerating individual actions was losing to the rate at which AWS adds
+them, so the boundary is drawn with denies instead:
+
+| Deny | Protects |
+| --- | --- |
+| Resource policies and public access | Who can reach platform data from outside the account: bucket, queue, Lambda, Glue, DynamoDB, and secret resource policies, S3 public-access and ownership controls, Lambda function URLs, cross-account replication |
+| Data movement | Cross-Region and cross-account copies whose destination is a request parameter the Region deny cannot see: DynamoDB global tables and replicas, CloudWatch Logs subscription filters and destinations, secret replication |
+| Durability and retention | Whether data survives: bucket creation and deletion, object version deletion, versioning, encryption configuration, lifecycle rules, and CloudWatch retention removal |
+| Cost controls | The caps themselves: Athena workgroup creation and update, Glue development endpoints, Lambda provisioned concurrency |
+
+Bucket creation is denied so every bucket carries the module's encryption,
+versioning, lifecycle, and public-access controls. Object deletion is allowed
+but version deletion is not, so a mistaken delete leaves a recoverable version.
+An engineer-created Athena workgroup would carry no per-query scan cutoff and
+would be invisible to the monthly spend guard, so only Terraform creates them.
+
+Engineers also cannot delete or update the Terraform-owned Athena workgroup or
+the Bronze and Silver catalog databases.
 
 ## Verification methodology
 

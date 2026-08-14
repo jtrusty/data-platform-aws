@@ -242,15 +242,47 @@ locals {
       ]
       Resource = "*"
     },
+    # Every action below moves platform data out of the account or the Region.
+    # The region deny cannot stop them: the destination is a request parameter,
+    # not the Region the call is made in.
+    {
+      Sid    = "ProtectAgainstDataMovement"
+      Effect = "Deny"
+      Action = [
+        "dynamodb:CreateGlobalTable",
+        "dynamodb:CreateTableReplica",
+        "dynamodb:UpdateGlobalTable*",
+        "logs:PutDestination*",
+        "logs:PutSubscriptionFilter",
+      ]
+      Resource = "*"
+    },
     {
       Sid    = "ProtectDurabilityAndRetention"
       Effect = "Deny"
       Action = [
         "logs:DeleteRetentionPolicy",
+        "s3:CreateBucket",
         "s3:DeleteBucket",
+        "s3:DeleteObjectVersion",
         "s3:PutBucketVersioning",
         "s3:PutEncryptionConfiguration",
         "s3:PutLifecycleConfiguration",
+      ]
+      Resource = "*"
+    },
+    # Terraform owns the cost caps. An engineer-made Athena workgroup would have
+    # no per-query scan cutoff and would not be watched by the monthly spend
+    # guard, and Glue development endpoints and provisioned concurrency bill by
+    # the hour whether or not anything uses them.
+    {
+      Sid    = "ProtectCostControls"
+      Effect = "Deny"
+      Action = [
+        "athena:CreateWorkGroup",
+        "athena:UpdateWorkGroup",
+        "glue:*DevEndpoint",
+        "lambda:PutProvisionedConcurrencyConfig",
       ]
       Resource = "*"
     },
