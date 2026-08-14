@@ -145,33 +145,16 @@ locals {
       Action   = "secretsmanager:*"
       Resource = "arn:aws:secretsmanager:us-east-2:${var.account_id}:secret:data-platform/${var.environment}/*"
     },
+    # Redshift Serverless checks that the caller could create its service-linked
+    # role on every CreateNamespace, even when the role already exists. The grant
+    # is pinned to that one service and role path.
     {
-      Sid      = "CreateTaggedPlatformKeys"
+      Sid      = "CreateRedshiftServiceLinkedRole"
       Effect   = "Allow"
-      Action   = ["kms:CreateKey"]
-      Resource = "*"
+      Action   = ["iam:CreateServiceLinkedRole"]
+      Resource = "arn:aws:iam::${var.account_id}:role/aws-service-role/redshift.amazonaws.com/AWSServiceRoleForRedshift"
       Condition = {
-        StringEquals = {
-          "aws:RequestTag/Platform"    = "data-platform"
-          "aws:RequestTag/Environment" = var.environment
-        }
-      }
-    },
-    {
-      Sid    = "ManageTaggedPlatformKeys"
-      Effect = "Allow"
-      Action = [
-        "kms:CreateAlias", "kms:DeleteAlias", "kms:DescribeKey", "kms:DisableKeyRotation",
-        "kms:EnableKeyRotation", "kms:GetKeyPolicy", "kms:GetKeyRotationStatus",
-        "kms:ListResourceTags", "kms:PutKeyPolicy", "kms:ScheduleKeyDeletion",
-        "kms:TagResource", "kms:UntagResource", "kms:UpdateAlias", "kms:UpdateKeyDescription",
-      ]
-      Resource = "*"
-      Condition = {
-        StringEquals = {
-          "aws:ResourceTag/Platform"    = "data-platform"
-          "aws:ResourceTag/Environment" = var.environment
-        }
+        StringEquals = { "iam:AWSServiceName" = "redshift.amazonaws.com" }
       }
     },
     {

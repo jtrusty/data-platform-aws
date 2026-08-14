@@ -196,6 +196,13 @@ administrator, pull requests require passing checks but not an independent
 approval. Adding a second trusted maintainer should be followed by requiring one
 CODEOWNER approval and preventing self-review for production.
 
+The deployment role holds no KMS key-management permissions. The platform
+deliberately uses no customer-managed keys outside Terraform state, which the
+bootstrap owns, so the role cannot create or administer one. It holds exactly
+one service-linked-role grant, pinned to `redshift.amazonaws.com` and that
+role's own ARN, because Redshift Serverless checks for that permission on every
+CreateNamespace call whether or not the role already exists.
+
 Terraform state, plan files, Identity Center SSO caches, local AWS configuration,
 and `.env` files are ignored and must never be committed. Terraform may create
 secret containers, but secret values are populated out of band so they do not
