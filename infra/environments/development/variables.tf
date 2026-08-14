@@ -87,7 +87,7 @@ variable "secret_recovery_window_days" {
 variable "noncurrent_version_expiration_days" {
   description = "Days to retain noncurrent S3 object versions."
   type        = number
-  default     = 30
+  default     = 7
 
   validation {
     condition     = var.noncurrent_version_expiration_days >= 7 && var.noncurrent_version_expiration_days <= 3650
