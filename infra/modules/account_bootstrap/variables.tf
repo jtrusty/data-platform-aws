@@ -80,6 +80,12 @@ variable "github_repository_id" {
   }
 }
 
+variable "manage_redshift_service_linked_role" {
+  description = "Create the account-wide Redshift service-linked role. Set to false for an account where it already exists; an existing managed role must be removed from state rather than destroyed."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Mandatory bootstrap ownership tags."
   type        = map(string)

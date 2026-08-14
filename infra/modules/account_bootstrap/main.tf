@@ -1,6 +1,9 @@
 locals {
-  immutable_subject = "repo:${var.github_repository_owner}@${var.github_owner_id}/${var.github_repository_name}@${var.github_repository_id}:environment:${var.github_environment}"
-  role_prefix       = "data-platform-${var.environment}"
+  github_repository_subject = "repo:${var.github_repository_owner}@${var.github_owner_id}/${var.github_repository_name}@${var.github_repository_id}"
+  immutable_subject         = "${local.github_repository_subject}:environment:${var.github_environment}"
+  immutable_plan_subject    = "${local.github_repository_subject}:environment:${var.environment}-plan"
+  role_prefix               = "data-platform-${var.environment}"
+  catalog_prefix            = "data_platform_${var.environment}"
   runtime_role_arns = {
     ingest        = "arn:aws:iam::${var.account_id}:role/data-platform/runtime/${local.role_prefix}-ingest"
     transform     = "arn:aws:iam::${var.account_id}:role/data-platform/runtime/${local.role_prefix}-transform"
@@ -14,12 +17,41 @@ locals {
   deployment_boundary_arn = "arn:aws:iam::${var.account_id}:policy/bootstrap/jtrusty-data-platform-deployment-boundary-${var.environment}"
 }
 
+moved {
+  from = aws_iam_service_linked_role.redshift
+  to   = aws_iam_service_linked_role.redshift[0]
+}
+
+moved {
+  from = aws_iam_role.terraform_plan[0]
+  to   = aws_iam_role.terraform_plan
+}
+
+moved {
+  from = aws_iam_role_policy.terraform_plan[0]
+  to   = aws_iam_role_policy.terraform_plan
+}
+
 module "state_backend" {
   source = "../state_backend"
 
   account_id  = var.account_id
   environment = var.environment
   tags        = var.tags
+}
+
+# The Redshift service-linked role is account-wide and already exists in any
+# account that has ever used Redshift, where creating it fails. Deleting it
+# would break unrelated Redshift usage, so it is also protected from destroy.
+resource "aws_iam_service_linked_role" "redshift" {
+  count = var.manage_redshift_service_linked_role ? 1 : 0
+
+  aws_service_name = "redshift.amazonaws.com"
+  description      = "Allows Amazon Redshift and Redshift Serverless to manage required account resources"
+
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -77,13 +109,12 @@ resource "aws_iam_policy" "runtime_boundary" {
         Resource = [
           "arn:aws:athena:us-east-2:${var.account_id}:workgroup/data-platform-${var.environment}-*",
           "arn:aws:athena:us-east-2:${var.account_id}:datacatalog/AwsDataCatalog",
-          "arn:aws:athena:us-east-2:${var.account_id}:datacatalog/data-platform-${var.environment}*",
           "arn:aws:dynamodb:us-east-2:${var.account_id}:table/data-platform-${var.environment}-*",
           "arn:aws:dynamodb:us-east-2:${var.account_id}:table/data-platform-${var.environment}-*/index/*",
           "arn:aws:glue:us-east-2:${var.account_id}:catalog",
-          "arn:aws:glue:us-east-2:${var.account_id}:database/data-platform-${var.environment}*",
+          "arn:aws:glue:us-east-2:${var.account_id}:database/${local.catalog_prefix}*",
           "arn:aws:glue:us-east-2:${var.account_id}:job/data-platform-${var.environment}-*",
-          "arn:aws:glue:us-east-2:${var.account_id}:table/data-platform-${var.environment}*/*",
+          "arn:aws:glue:us-east-2:${var.account_id}:table/${local.catalog_prefix}*/*",
           "arn:aws:lambda:us-east-2:${var.account_id}:function:data-platform-${var.environment}-*",
           "arn:aws:logs:us-east-2:${var.account_id}:log-group:/aws-glue/*",
           "arn:aws:logs:us-east-2:${var.account_id}:log-group:/aws/lambda/data-platform-${var.environment}-*:*",
@@ -159,6 +190,7 @@ resource "aws_iam_policy" "runtime_boundary" {
         Action   = "kms:*"
         Resource = module.state_backend.kms_key_arn
       },
+      local.region_guardrail_statement,
     ]
   })
   tags = var.tags
@@ -173,6 +205,32 @@ resource "aws_iam_policy" "deployment_boundary" {
   description = "Maximum permissions for the environment Terraform deployment role"
   policy      = local.terraform_deployment_policy
   tags        = var.tags
+}
+
+resource "aws_iam_policy" "deployment_guardrails" {
+  name        = "jtrusty-data-platform-deployment-guardrails-${var.environment}"
+  path        = "/bootstrap/"
+  description = "Region and billed-resource denies applied to the environment Terraform deployment role"
+  policy      = local.deployment_guardrail_policy
+  tags        = var.tags
+}
+
+resource "aws_iam_role_policy_attachment" "deployment_guardrails" {
+  role       = aws_iam_role.terraform_deploy.name
+  policy_arn = aws_iam_policy.deployment_guardrails.arn
+}
+
+# Attached to both DataEngineer permission sets by customer-managed reference so
+# a federated session cannot create resources in an unused, unmonitored region.
+resource "aws_iam_policy" "human_region_guardrail" {
+  name        = "jtrusty-data-platform-region-guardrail"
+  path        = "/data-platform/human/"
+  description = "Denies human platform sessions outside the approved us-east-2 region"
+  policy = jsonencode({
+    Version   = "2012-10-17"
+    Statement = [local.human_region_guardrail_statement]
+  })
+  tags = var.tags
 }
 
 resource "aws_iam_role" "terraform_deploy" {
@@ -208,10 +266,28 @@ resource "aws_iam_role_policy" "terraform_deploy" {
   policy = local.terraform_deployment_policy
 }
 
-resource "aws_iam_role" "terraform_plan" {
+resource "aws_iam_role_policy" "protect_production_warehouse" {
   count = var.environment == "production" ? 1 : 0
 
-  name = "jtrusty-data-platform-terraform-plan-production"
+  name = "protect-production-warehouse"
+  role = aws_iam_role.terraform_deploy.id
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Sid      = "ProtectProductionWarehouse"
+      Effect   = "Deny"
+      Action   = ["redshift-serverless:DeleteNamespace", "redshift-serverless:DeleteWorkgroup"]
+      Resource = "*"
+    }]
+  })
+}
+
+# Every environment gets a read-only plan identity so pull requests can be
+# planned and scheduled drift detection can run without an apply-capable
+# credential. It is assumable only from the matching {environment}-plan
+# GitHub Environment.
+resource "aws_iam_role" "terraform_plan" {
+  name = "jtrusty-data-platform-terraform-plan-${var.environment}"
   path = "/bootstrap/"
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -224,7 +300,7 @@ resource "aws_iam_role" "terraform_plan" {
       Condition = {
         StringEquals = {
           "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository_owner}@${var.github_owner_id}/${var.github_repository_name}@${var.github_repository_id}:environment:production-plan"
+          "token.actions.githubusercontent.com:sub" = local.immutable_plan_subject
         }
       }
     }]
@@ -233,10 +309,8 @@ resource "aws_iam_role" "terraform_plan" {
 }
 
 resource "aws_iam_role_policy" "terraform_plan" {
-  count = var.environment == "production" ? 1 : 0
-
-  name = "terraform-plan-production"
-  role = aws_iam_role.terraform_plan[0].id
+  name = "terraform-plan-${var.environment}"
+  role = aws_iam_role.terraform_plan.id
   policy = jsonencode({
     Version = "2012-10-17"
     Statement = [
@@ -284,35 +358,45 @@ resource "aws_iam_role_policy" "terraform_plan" {
         Action = [
           "athena:GetDataCatalog", "athena:GetNamedQuery", "athena:GetPreparedStatement", "athena:GetWorkGroup",
           "dynamodb:Describe*", "glue:Get*", "iam:Get*", "lambda:Get*",
-          "redshift-serverless:GetCustomDomainAssociation", "redshift-serverless:GetEndpointAccess",
-          "redshift-serverless:GetNamespace", "redshift-serverless:GetRecoveryPoint",
-          "redshift-serverless:GetResourcePolicy", "redshift-serverless:GetSnapshot",
-          "redshift-serverless:GetTableRestoreStatus", "redshift-serverless:GetUsageLimit",
-          "redshift-serverless:GetWorkgroup", "secretsmanager:DescribeSecret",
+          "secretsmanager:DescribeSecret",
           "sqs:Get*", "states:DescribeStateMachine",
         ]
         Resource = [
-          "arn:aws:athena:us-east-2:${var.account_id}:workgroup/data-platform-production-*",
+          "arn:aws:athena:us-east-2:${var.account_id}:workgroup/${local.role_prefix}-*",
           "arn:aws:athena:us-east-2:${var.account_id}:datacatalog/AwsDataCatalog",
-          "arn:aws:dynamodb:us-east-2:${var.account_id}:table/data-platform-production-*",
-          "arn:aws:dynamodb:us-east-2:${var.account_id}:table/data-platform-production-*/index/*",
+          "arn:aws:dynamodb:us-east-2:${var.account_id}:table/${local.role_prefix}-*",
+          "arn:aws:dynamodb:us-east-2:${var.account_id}:table/${local.role_prefix}-*/index/*",
           "arn:aws:glue:us-east-2:${var.account_id}:catalog",
-          "arn:aws:glue:us-east-2:${var.account_id}:crawler/data-platform-production-*",
-          "arn:aws:glue:us-east-2:${var.account_id}:database/data-platform-production*",
-          "arn:aws:glue:us-east-2:${var.account_id}:job/data-platform-production-*",
-          "arn:aws:glue:us-east-2:${var.account_id}:table/data-platform-production*/*",
-          "arn:aws:iam::${var.account_id}:policy/data-platform/runtime/data-platform-production-*",
-          "arn:aws:iam::${var.account_id}:role/data-platform/runtime/data-platform-production-*",
-          "arn:aws:lambda:us-east-2:${var.account_id}:function:data-platform-production-*",
+          "arn:aws:glue:us-east-2:${var.account_id}:crawler/${local.role_prefix}-*",
+          "arn:aws:glue:us-east-2:${var.account_id}:database/${local.catalog_prefix}*",
+          "arn:aws:glue:us-east-2:${var.account_id}:job/${local.role_prefix}-*",
+          "arn:aws:glue:us-east-2:${var.account_id}:table/${local.catalog_prefix}*/*",
+          "arn:aws:iam::${var.account_id}:policy/data-platform/runtime/${local.role_prefix}-*",
+          "arn:aws:iam::${var.account_id}:role/data-platform/runtime/${local.role_prefix}-*",
+          "arn:aws:lambda:us-east-2:${var.account_id}:function:${local.role_prefix}-*",
           "arn:aws:logs:us-east-2:${var.account_id}:log-group:/aws-glue/*",
-          "arn:aws:logs:us-east-2:${var.account_id}:log-group:/aws/lambda/data-platform-production-*:*",
-          "arn:aws:redshift-serverless:us-east-2:${var.account_id}:namespace/data-platform-production-*",
-          "arn:aws:redshift-serverless:us-east-2:${var.account_id}:workgroup/data-platform-production-*",
-          "arn:aws:secretsmanager:us-east-2:${var.account_id}:secret:data-platform/production/*",
-          "arn:aws:sqs:us-east-2:${var.account_id}:data-platform-production-*",
-          "arn:aws:states:us-east-2:${var.account_id}:execution:data-platform-production-*:*",
-          "arn:aws:states:us-east-2:${var.account_id}:stateMachine:data-platform-production-*",
+          "arn:aws:logs:us-east-2:${var.account_id}:log-group:/aws/lambda/${local.role_prefix}-*:*",
+          "arn:aws:secretsmanager:us-east-2:${var.account_id}:secret:data-platform/${var.environment}/*",
+          "arn:aws:sqs:us-east-2:${var.account_id}:${local.role_prefix}-*",
+          "arn:aws:states:us-east-2:${var.account_id}:execution:${local.role_prefix}-*:*",
+          "arn:aws:states:us-east-2:${var.account_id}:stateMachine:${local.role_prefix}-*",
         ]
+      },
+      {
+        Sid    = "ReadRedshiftServerless"
+        Effect = "Allow"
+        Action = [
+          "redshift-serverless:GetCustomDomainAssociation",
+          "redshift-serverless:GetEndpointAccess",
+          "redshift-serverless:GetNamespace",
+          "redshift-serverless:GetRecoveryPoint",
+          "redshift-serverless:GetResourcePolicy",
+          "redshift-serverless:GetSnapshot",
+          "redshift-serverless:GetTableRestoreStatus",
+          "redshift-serverless:GetUsageLimit",
+          "redshift-serverless:GetWorkgroup",
+        ]
+        Resource = "*"
       },
       {
         Sid      = "ReadPlatformKeys"
@@ -322,7 +406,7 @@ resource "aws_iam_role_policy" "terraform_plan" {
         Condition = {
           StringEquals = {
             "aws:ResourceTag/Platform"    = "data-platform"
-            "aws:ResourceTag/Environment" = "production"
+            "aws:ResourceTag/Environment" = var.environment
           }
         }
       },
@@ -344,7 +428,7 @@ resource "aws_iam_role_policy" "terraform_plan" {
           "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration",
           "s3:ListBucket", "s3:ListBucketVersions",
         ]
-        Resource = ["arn:aws:s3:::data-platform-production-*"]
+        Resource = ["arn:aws:s3:::${local.role_prefix}-*"]
       },
     ]
   })

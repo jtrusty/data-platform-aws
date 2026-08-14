@@ -3,8 +3,14 @@ actionlint = "1.7.12"
 aws-cli = "2.36.22"
 ripgrep = "15.1.0"
 terraform = "1.15.8"
+terraform-docs = "0.20.0"
 tflint = "0.64.0"
 trivy = "0.73.0"
+
+[env]
+# Every root and module initializes separately; without a shared cache each one
+# downloads the AWS provider again.
+TF_PLUGIN_CACHE_DIR = "{{config_root}}/.terraform-plugin-cache"
 
 [tasks.fmt]
 description = "Format Terraform files"
@@ -18,6 +24,7 @@ run = "terraform fmt -check -recursive"
 description = "Initialize and validate each Terraform root and module"
 run = '''
 set -eu
+mkdir -p "$TF_PLUGIN_CACHE_DIR"
 rg --files infra -g 'versions.tf' | sed 's#/versions.tf$##' | sort -u | while read -r directory; do
   TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" init -backend=false -input=false
   TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" validate
@@ -28,6 +35,7 @@ done
 description = "Run Terraform tests"
 run = '''
 set -eu
+mkdir -p "$TF_PLUGIN_CACHE_DIR"
 rg --files infra -g '*.tftest.hcl' | sed 's#/tests/.*##' | sort -u | while read -r directory; do
   TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" init -backend=false -input=false
   TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" test
@@ -53,17 +61,17 @@ for environment in sandbox development production; do
   bootstrap="infra/bootstrap/$environment"
   rg -F 'allowed_account_ids = [var.aws_account_id]' "$root/main.tf"
   rg -F 'Environment = local.environment' "$root/main.tf"
-  rg -F 'region         = "us-east-2"' "$root/backend.hcl.example"
-  rg -F "key            = \"data-platform/$environment/terraform.tfstate\"" "$root/backend.hcl.example"
-  rg -F 'kms_key_id' "$root/backend.hcl.example"
-  rg -F "key          = \"bootstrap/terraform.tfstate\"" "$bootstrap/backend.hcl.example"
-  rg -F 'kms_key_id' "$bootstrap/backend.hcl.example"
+  rg -F 'region         = "us-east-2"' "$root/backend.hcl"
+  rg -F "key            = \"data-platform/$environment/terraform.tfstate\"" "$root/backend.hcl"
+  rg -F 'kms_key_id' "$root/backend.hcl"
+  rg -F "key          = \"bootstrap/terraform.tfstate\"" "$bootstrap/backend.hcl"
+  rg -F 'kms_key_id' "$bootstrap/backend.hcl"
 done
 rg -F 'allowed_account_ids = ["699599381258"]' infra/organization/versions.tf
-rg -F 'key          = "organization/terraform.tfstate"' infra/organization/backend.hcl.example
-rg -F 'kms_key_id' infra/organization/backend.hcl.example
-rg -F 'key          = "bootstrap/management/terraform.tfstate"' infra/bootstrap/management/backend.hcl.example
-rg -F 'kms_key_id' infra/bootstrap/management/backend.hcl.example
+rg -F 'key          = "organization/terraform.tfstate"' infra/organization/backend.hcl
+rg -F 'kms_key_id' infra/organization/backend.hcl
+rg -F 'key          = "bootstrap/management/terraform.tfstate"' infra/bootstrap/management/backend.hcl
+rg -F 'kms_key_id' infra/bootstrap/management/backend.hcl
 
 if rg 'thumbprint_list\s*=\s*\[\]' infra/modules/account_bootstrap; then
   echo "GitHub OIDC thumbprints must be AWS-managed to avoid perpetual drift" >&2
@@ -71,7 +79,9 @@ if rg 'thumbprint_list\s*=\s*\[\]' infra/modules/account_bootstrap; then
 fi
 
 deployment_workflow=".github/workflows/deploy.yml"
+drift_workflow=".github/workflows/drift.yml"
 test -f "$deployment_workflow"
+test -f "$drift_workflow"
 rg -F 'id-token: write' "$deployment_workflow"
 rg -F "github.event.pull_request.head.repo.full_name == github.repository" "$deployment_workflow"
 rg -F "inputs.target == 'production-plan'" "$deployment_workflow"
@@ -79,9 +89,56 @@ rg -F 'environment: production-plan' "$deployment_workflow"
 rg -F 'environment: development' "$deployment_workflow"
 rg -F 'environment: production' "$deployment_workflow"
 rg -F 'environment: sandbox' "$deployment_workflow"
+rg 'environment: .*matrix\.environment.*-plan' "$deployment_workflow"
 rg -F 'aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c' "$deployment_workflow"
 rg -F 'environment=development' "$deployment_workflow"
 rg -F 'apply -input=false' "$deployment_workflow"
+rg -F 'scripts/bootstrap-redshift-database.sh sandbox' "$deployment_workflow"
+rg -F 'scripts/bootstrap-redshift-database.sh development' "$deployment_workflow"
+rg -F 'scripts/bootstrap-redshift-database.sh production' "$deployment_workflow"
+rg -F 'scripts/enforce-log-retention.sh sandbox' "$deployment_workflow"
+rg -F 'scripts/enforce-log-retention.sh development' "$deployment_workflow"
+rg -F 'scripts/enforce-log-retention.sh production' "$deployment_workflow"
+rg -F 'REVIEWED_FINGERPRINT' "$deployment_workflow"
+rg -F 'detailed-exitcode' "$drift_workflow"
+rg 'environment: .*matrix\.environment.*-plan' "$drift_workflow"
+
+# A public repository's workflow artifacts are world-readable, so a plan file
+# that can contain resource attributes must never be uploaded.
+if rg -F 'actions/upload-artifact' "$deployment_workflow"; then
+  echo "plan files must not be published as workflow artifacts" >&2
+  exit 1
+fi
+
+analytics_module="infra/modules/private_redshift"
+if rg 'resource\s+"aws_(nat_gateway|internet_gateway|eip)"' "$analytics_module"; then
+  echo "private analytics must not create NAT, internet gateways, or public IPs" >&2
+  exit 1
+fi
+if rg 'vpc_endpoint_type\s*=\s*"Interface"' "$analytics_module"; then
+  echo "paid interface endpoints require an explicit cost review" >&2
+  exit 1
+fi
+rg 'publicly_accessible\s*=\s*false' "$analytics_module/main.tf"
+rg -F 'breach_action = "deactivate"' "$analytics_module/main.tf"
+rg -F 'enforce_workgroup_configuration    = true' infra/modules/athena_analytics/main.tf
+
+# Audit coverage must stay on and stay cheap.
+audit_module="infra/modules/organization_audit"
+rg -F 'is_organization_trail         = true' "$audit_module/main.tf"
+rg -F 'enable_log_file_validation    = true' "$audit_module/main.tf"
+rg -F 'sse_algorithm = "AES256"' "$audit_module/main.tf"
+if rg -F 'aws_cloudwatch_log_group' "$audit_module/main.tf"; then
+  echo "CloudTrail must not stream to CloudWatch Logs, which bills per ingested GB" >&2
+  exit 1
+fi
+
+# Guardrails that keep an idle platform from accruing hourly charges.
+guardrails="infra/modules/account_bootstrap/policies.tf"
+rg -F 'DenyOutsideApprovedRegion' "$guardrails"
+rg -F 'DenyBilledNetworkAndComputeResources' "$guardrails"
+rg -F '"ec2:Create*Gateway*"' "$guardrails"
+rg -F '"ec2:RunInstances"' "$guardrails"
 '''
 
 [tasks.lint]
@@ -92,9 +149,43 @@ run = "tflint --init && tflint --recursive"
 description = "Lint GitHub Actions workflows"
 run = "actionlint"
 
+[tasks."lint:shell"]
+description = "Parse deployment shell scripts"
+run = "bash -n scripts/*.sh scripts/tests/*.sh scripts/tests/fixtures/aws"
+
+[tasks."test:shell"]
+description = "Test the deployment shell scripts against a stubbed AWS CLI"
+run = '''
+set -eu
+scripts/tests/bootstrap-redshift-database.sh
+scripts/tests/enforce-log-retention.sh
+'''
+
+[tasks.docs]
+description = "Generate module documentation"
+run = '''
+set -eu
+for module in infra/modules/*/; do
+  terraform-docs markdown table --hide providers --output-file README.md --output-mode replace "$module"
+done
+'''
+
+[tasks."docs:check"]
+description = "Verify module documentation matches the current inputs and outputs"
+run = '''
+set -eu
+for module in infra/modules/*/; do
+  terraform-docs markdown table --hide providers --output-file README.md --output-mode replace --output-check "$module"
+done
+'''
+
 [tasks.security]
 description = "Scan Terraform for high-value security findings"
 run = "trivy config --exit-code 1 --severity HIGH,CRITICAL --skip-dirs '**/.terraform' --skip-version-check infra"
+
+[tasks."security:report"]
+description = "Report lower-severity configuration findings without failing"
+run = "trivy config --exit-code 0 --severity MEDIUM --skip-dirs '**/.terraform' --skip-version-check infra"
 
 [tasks.secrets]
 description = "Scan committed source for credentials and secret material"
@@ -110,6 +201,9 @@ mise run test
 mise run contract
 mise run lint
 mise run lint:actions
+mise run lint:shell
+mise run test:shell
+mise run docs:check
 mise run security
 mise run secrets
 '''

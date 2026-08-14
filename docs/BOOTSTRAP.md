@@ -157,7 +157,7 @@ cp infra/bootstrap/management/backend.tf.example \
 terraform -chdir=infra/bootstrap/management init \
   -migrate-state \
   -force-copy \
-  -backend-config=backend.hcl.example
+  -backend-config=backend.hcl
 terraform -chdir=infra/bootstrap/management state list
 ```
 
@@ -190,7 +190,7 @@ This root creates the permanent permission sets and account matrix:
 export AWS_PROFILE=organization-admin
 
 terraform -chdir=infra/organization init \
-  -backend-config=backend.hcl.example
+  -backend-config=backend.hcl
 terraform -chdir=infra/organization plan \
   -out=/tmp/data-platform-organization.tfplan
 terraform -chdir=infra/organization apply \
@@ -241,7 +241,7 @@ cp infra/bootstrap/sandbox/backend.tf.example \
 terraform -chdir=infra/bootstrap/sandbox init \
   -migrate-state \
   -force-copy \
-  -backend-config=backend.hcl.example
+  -backend-config=backend.hcl
 terraform -chdir=infra/bootstrap/sandbox state list
 ```
 
@@ -254,7 +254,8 @@ Each workload bootstrap creates:
 - an encrypted, versioned, TLS-only Terraform state bucket and KMS key;
 - a GitHub OIDC provider;
 - a tightly trusted deployment role with a permissions boundary;
-- a runtime-role permissions boundary; and
+- a runtime-role permissions boundary;
+- the Redshift service-linked role and owner-only Query Editor v2 policy; and
 - in production, a separate read-only planning role.
 
 The deployment role can pass only the four approved runtime role ARNs to their
@@ -264,14 +265,32 @@ trust, boundary, OIDC provider, or protected state controls.
 ## GitHub configuration
 
 The `sandbox`, `development`, `production-plan`, and `production` GitHub
-Environments were created on 2026-08-13. Each stores only non-secret
-`AWS_ACCOUNT_ID`, `AWS_REGION`, and `AWS_ROLE_ARN` variables. No AWS access key
-or human SSO credential is stored in GitHub.
+Environments were created on 2026-08-13. The `sandbox-plan` and
+`development-plan` Environments are required by the pull-request plan and drift
+jobs added on 2026-08-13; create them before merging that change. Each stores
+only non-secret `AWS_ACCOUNT_ID`, `AWS_REGION`, and `AWS_ROLE_ARN` variables. No
+AWS access key or human SSO credential is stored in GitHub.
 
 - `sandbox` accepts manual deployments from any selected ref.
 - `development` accepts only the `main` branch.
+- `sandbox-plan` and `development-plan` accept any ref and use that account's
+  read-only plan role for pull-request plans and nightly drift detection.
 - `production-plan` accepts any ref but uses the read-only production plan role.
 - `production` accepts only `v*` tags and requires approval from `jtrusty`.
+
+Each workload account now exposes a `jtrusty-data-platform-terraform-plan-*`
+role for its `{environment}-plan` Environment. Apply the bootstrap roots before
+the first pull-request plan or drift run, and set the new Environment variables
+from the `terraform_plan_role_arn` output.
+
+The organization root additionally requires CloudTrail trusted access for the
+organization before `is_organization_trail` can be applied:
+
+```bash
+aws organizations enable-aws-service-access \
+  --service-principal cloudtrail.amazonaws.com \
+  --profile management-sso
+```
 
 Because `jtrusty` is presently the only production reviewer, self-review is
 allowed. Enabling “prevent self-review” with that single reviewer would make
@@ -345,6 +364,43 @@ organization access -> sandbox bootstrap -> sandbox workload
                     -> development bootstrap -> merge -> development workload
                     -> production bootstrap -> release tag -> production workload
 ```
+
+For the analytics increment, apply all three workload-account bootstrap roots
+first because the Identity Center permission sets reference the same
+`/data-platform/human/jtrusty-data-platform-query-editor-v2` policy in every
+assigned account. Then apply the organization root, deploy sandbox, and merge
+only after sandbox verification:
+
+```text
+sandbox/development/production bootstrap
+  -> organization access
+  -> sandbox workload and live tests
+  -> merge -> development workload and live tests
+  -> release tag -> approved production workload
+```
+
+The workload apply creates the namespace without a long-lived admin password.
+The creating GitHub role becomes the initial IAM database administrator, then
+`scripts/bootstrap-redshift-database.sh` runs in the same short-lived session.
+It discovers the exact generated DataEngineer Identity Center role, creates a
+password-disabled `IAMR:` database user and non-superuser `data_engineer` role,
+and grants normal database/schema/table plus monitoring access. The script is
+idempotent and creates no secret.
+
+### Initialize Query Editor v2 once per account
+
+Before DataEngineers first use Query Editor v2, sign into each workload account
+as `PlatformAdmin`, select `us-east-2`, and open Query Editor v2. On the first
+account setup, choose the no-additional-cost AWS-owned encryption key and do not
+configure the optional S3 file-upload location. AWS documents this account-wide
+encryption choice as immutable, so it is an intentional one-time administrator
+step rather than a routine engineer setting.
+
+DataEngineers then connect to database `analytics` on the environment's
+`data-platform-<environment>-analytics` workgroup using temporary IAM
+credentials. Do not select database user/password or Secrets Manager
+authentication; those modes would create or consume persistent credentials
+outside the approved `data-platform/*` secret namespace.
 
 Use `terraform plan -out` with the matching SSO profile, review the saved plan,
 and apply that exact plan locally. Plan files can contain sensitive values; keep

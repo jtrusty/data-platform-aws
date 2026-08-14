@@ -34,3 +34,19 @@ output "foundation" {
     work_queue_arns        = module.data_foundation.queue_arns
   }
 }
+
+output "analytics" {
+  description = "Cost-controlled Athena and private Redshift configuration."
+  value = {
+    athena_catalog_databases   = module.athena_analytics.catalog_database_names
+    athena_query_cutoff_bytes  = module.athena_analytics.bytes_scanned_cutoff_per_query
+    athena_workgroup_name      = module.athena_analytics.workgroup_name
+    redshift_base_capacity     = module.private_redshift.base_capacity
+    redshift_max_capacity      = module.private_redshift.max_capacity
+    redshift_monthly_rpu_hours = module.private_redshift.monthly_rpu_hours
+    redshift_namespace_name    = module.private_redshift.namespace_name
+    redshift_private           = !module.private_redshift.publicly_accessible
+    redshift_workgroup_name    = module.private_redshift.workgroup_name
+    vpc_id                     = module.private_redshift.vpc_id
+  }
+}

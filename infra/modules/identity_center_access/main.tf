@@ -63,6 +63,46 @@ resource "aws_ssoadmin_permission_set_inline_policy" "data_engineer_production" 
   permission_set_arn = aws_ssoadmin_permission_set.data_engineer_production.arn
 }
 
+resource "aws_ssoadmin_customer_managed_policy_attachment" "query_editor_nonprod" {
+  instance_arn       = var.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.data_engineer_nonprod.arn
+
+  customer_managed_policy_reference {
+    name = "jtrusty-data-platform-query-editor-v2"
+    path = "/data-platform/human/"
+  }
+}
+
+resource "aws_ssoadmin_customer_managed_policy_attachment" "query_editor_production" {
+  instance_arn       = var.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.data_engineer_production.arn
+
+  customer_managed_policy_reference {
+    name = "jtrusty-data-platform-query-editor-v2"
+    path = "/data-platform/human/"
+  }
+}
+
+resource "aws_ssoadmin_customer_managed_policy_attachment" "region_guardrail_nonprod" {
+  instance_arn       = var.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.data_engineer_nonprod.arn
+
+  customer_managed_policy_reference {
+    name = "jtrusty-data-platform-region-guardrail"
+    path = "/data-platform/human/"
+  }
+}
+
+resource "aws_ssoadmin_customer_managed_policy_attachment" "region_guardrail_production" {
+  instance_arn       = var.instance_arn
+  permission_set_arn = aws_ssoadmin_permission_set.data_engineer_production.arn
+
+  customer_managed_policy_reference {
+    name = "jtrusty-data-platform-region-guardrail"
+    path = "/data-platform/human/"
+  }
+}
+
 resource "aws_ssoadmin_account_assignment" "organization_admin" {
   for_each = var.organization_admin_user_ids
 

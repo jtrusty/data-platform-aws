@@ -32,6 +32,16 @@ run "group_assignment_matrix" {
   }
 
   assert {
+    condition = (
+      aws_ssoadmin_customer_managed_policy_attachment.query_editor_nonprod.customer_managed_policy_reference[0].name == "jtrusty-data-platform-query-editor-v2" &&
+      aws_ssoadmin_customer_managed_policy_attachment.query_editor_nonprod.customer_managed_policy_reference[0].path == "/data-platform/human/" &&
+      aws_ssoadmin_customer_managed_policy_attachment.query_editor_production.customer_managed_policy_reference[0].name == "jtrusty-data-platform-query-editor-v2" &&
+      aws_ssoadmin_customer_managed_policy_attachment.query_editor_production.customer_managed_policy_reference[0].path == "/data-platform/human/"
+    )
+    error_message = "Both DataEngineer permission sets must attach the workload-account Query Editor policy."
+  }
+
+  assert {
     condition = alltrue(concat(
       [for assignment in aws_ssoadmin_account_assignment.platform_admin : assignment.principal_type == "GROUP"],
       [for assignment in aws_ssoadmin_account_assignment.data_engineer_nonprod : assignment.principal_type == "GROUP"],
@@ -55,6 +65,7 @@ run "data_engineer_has_no_admin_escape" {
       !strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "PowerUserAccess"),
       !strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "iam:*"),
       !strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "organizations:*"),
+      !strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "redshift-data:List*"),
     ])
     error_message = "DataEngineer must not receive admin, wildcard IAM, Organizations, or state access."
   }
@@ -110,6 +121,7 @@ run "data_engineer_has_no_admin_escape" {
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "athena:*"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "athena:us-east-2:555044956444:datacatalog/AwsDataCatalog"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "states:*"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "log-group:/aws/redshift/data-platform-sandbox-warehouse/*"),
     ])
     error_message = "DataEngineer must have platform-scoped resources, data-key use, state-key denial, and normal resource lifecycle actions."
   }

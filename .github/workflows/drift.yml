@@ -1,0 +1,72 @@
+name: Detect drift
+
+# A console change, a deactivated Redshift workgroup, or a manual fix is
+# otherwise invisible until the next merge. This uses the read-only plan roles
+# only, so it costs GitHub Actions minutes and nothing in AWS.
+on:
+  schedule:
+    - cron: "17 7 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drift-detection
+  cancel-in-progress: false
+
+jobs:
+  plan:
+    name: Plan ${{ matrix.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: ${{ matrix.environment }}-plan
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        environment:
+          - sandbox
+          - development
+          - production
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Install mise
+        uses: jdx/mise-action@6d1e696aa24c1aa1bcc1adea0212707c71ab78a8 # v3.6.1
+        with:
+          install: true
+          cache: true
+
+      - name: Assume ${{ matrix.environment }} plan role
+        uses: aws-actions/configure-aws-credentials@e6de054238d6b7531b4efff3b6587d9aade6a06c # v6.2.3
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-session-name: github-terraform-${{ matrix.environment }}-drift
+
+      - name: Verify AWS account
+        env:
+          EXPECTED_ACCOUNT_ID: ${{ vars.AWS_ACCOUNT_ID }}
+        run: test "$(aws sts get-caller-identity --query Account --output text)" = "$EXPECTED_ACCOUNT_ID"
+
+      - name: Detect ${{ matrix.environment }} drift
+        env:
+          ENVIRONMENT: ${{ matrix.environment }}
+        run: |
+          root="infra/environments/${ENVIRONMENT}"
+          terraform -chdir="$root" init -input=false -backend-config=backend.hcl
+          set +e
+          terraform -chdir="$root" plan -input=false -lock=false -detailed-exitcode -no-color
+          exit_code=$?
+          set -e
+          if [[ "$exit_code" == "2" ]]; then
+            echo "::error::${ENVIRONMENT} has drifted from its Terraform configuration."
+            exit 1
+          fi
+          exit "$exit_code"

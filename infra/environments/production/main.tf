@@ -50,3 +50,34 @@ module "data_foundation" {
   secret_names                       = var.secret_names
   tags                               = local.tags
 }
+
+module "athena_analytics" {
+  source = "../../modules/athena_analytics"
+
+  aws_account_id                 = var.aws_account_id
+  environment                    = local.environment
+  resource_prefix                = local.resource_prefix
+  athena_results_bucket_id       = module.data_foundation.bucket_names["athena-results"]
+  bronze_bucket_id               = module.data_foundation.bucket_names.bronze
+  silver_bucket_id               = module.data_foundation.bucket_names.silver
+  bytes_scanned_cutoff_per_query = var.athena_bytes_scanned_cutoff_per_query
+  tags                           = local.tags
+}
+
+module "private_redshift" {
+  source = "../../modules/private_redshift"
+
+  aws_account_id              = var.aws_account_id
+  availability_zones          = var.analytics_availability_zones
+  environment                 = local.environment
+  resource_prefix             = local.resource_prefix
+  vpc_cidr                    = local.vpc_cidr
+  redshift_role_arn           = module.data_foundation.runtime_role_arns.redshift
+  silver_bucket_arn           = module.data_foundation.bucket_arns.silver
+  base_capacity               = var.redshift_base_capacity
+  max_capacity                = var.redshift_max_capacity
+  monthly_rpu_hours           = var.redshift_monthly_rpu_hours
+  max_query_execution_seconds = var.redshift_max_query_execution_seconds
+  log_retention_days          = var.redshift_log_retention_days
+  tags                        = local.tags
+}

@@ -31,6 +31,20 @@ run "development_environment_contract" {
     condition     = output.vpc_cidr == "10.50.0.0/16"
     error_message = "Development must retain its dedicated VPC CIDR."
   }
+
+  assert {
+    condition = (
+      output.analytics.athena_workgroup_name == "data-platform-development-analytics" &&
+      output.analytics.athena_query_cutoff_bytes == 10737418240 &&
+      output.analytics.redshift_namespace_name == "data-platform-development-warehouse" &&
+      output.analytics.redshift_workgroup_name == "data-platform-development-analytics" &&
+      output.analytics.redshift_private &&
+      output.analytics.redshift_base_capacity == 4 &&
+      output.analytics.redshift_max_capacity == 4 &&
+      output.analytics.redshift_monthly_rpu_hours == 16
+    )
+    error_message = "Development analytics must retain the low-cost Athena and private Redshift guardrails."
+  }
 }
 
 run "reject_invalid_account_id" {

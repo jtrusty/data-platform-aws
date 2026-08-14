@@ -13,17 +13,24 @@ This first increment establishes:
 - a reusable secure S3 bucket module;
 - per-account state and GitHub OIDC bootstrap roots;
 - Terraform-managed Identity Center permission sets and group assignments;
+- cost-controlled Athena workgroups and Bronze/Silver Glue Catalog databases;
+- a private, no-NAT analytics VPC and tightly capped Redshift Serverless warehouse;
+- an organization CloudTrail recording management events in every account;
+- region and billed-resource IAM guardrails on deployment and human sessions;
 - credential-free Terraform tests for high-impact state, IAM, and S3 controls;
-- formatting, validation, linting, and security-scanning CI; and
+- pull-request plans, a reviewed-plan gate on production, and nightly drift
+  detection using read-only per-environment plan roles;
+- formatting, validation, linting, documentation, and security-scanning CI; and
 - the target trust model in [SECURITY.md](SECURITY.md).
 
 The state, Identity Center, GitHub OIDC, and deployment-role bootstrap is live
 in all four accounts. The cheap-by-default S3, SQS, DynamoDB, and runtime-IAM
-foundation is also live and drift-free in sandbox and development. Production
-remains intentionally undeployed until a reviewed release tag is approved.
-Networking, analytics services, and Redshift are the next increments. See the
-dated deployment record in [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) and the
-capacity, retention, Free Tier, and planned Redshift choices in
+foundation is also live and drift-free in sandbox and development. Athena,
+private networking, and Redshift are implemented and awaiting the ordered
+bootstrap/workload promotion described below. Production remains intentionally
+undeployed until a reviewed release tag is approved. See the dated deployment
+record in [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) and the capacity, retention,
+Free Tier, Athena, and Redshift choices in
 [docs/COSTS.md](docs/COSTS.md).
 
 ## Local setup
@@ -45,6 +52,7 @@ mise run fmt
 mise run validate
 mise run test
 mise run lint
+mise run docs
 mise run security
 mise run secrets
 ```
@@ -83,7 +91,7 @@ CI cannot assume a management-account role.
 Remote-state values are deliberately not committed. Each workload account gets
 its own versioned, encrypted state bucket. Bootstrap roots begin with local
 state; after creating the bucket, copy `backend.tf.example` to the gitignored
-`backend.tf` and migrate using `backend.hcl.example`. Environment roots use the
+`backend.tf` and migrate using `backend.hcl`. Environment roots use the
 remote backend from their first apply. The AWS provider also uses
 `allowed_account_ids`, so credentials for the wrong account fail immediately.
 
@@ -155,7 +163,7 @@ Future local applies are reserved for bootstrap changes and recovery; routine
 sandbox, development, and production deployments use the workflow described in
 [the bootstrap runbook](docs/BOOTSTRAP.md#how-github-actions-deploys).
 
-## Inputs needed before AWS deployment
+## Inputs still needed
 
 The Identity Center instance, temporary bootstrap administrator, centralized
 root-access features, and root-credential audit are complete. The remaining
@@ -163,10 +171,10 @@ platform decisions are:
 
 1. Decide required cost-center tags, baseline SCP restrictions, and any KMS
    requirements beyond the current customer-managed keys.
-2. Decide the Redshift database name, base capacity, retention/deletion
-   expectations, and whether direct JDBC access is required.
-3. Identify the first source integrations and secret containers to provision.
-4. Provide production alert destinations and log/data retention requirements.
+2. Identify the first source integrations and secret containers to provision.
+3. Provide private budget-alert destinations; no email address is committed to
+   this public repository.
+4. Revisit data and log retention after observing real volume.
 
 Centralized root access is enabled. The dated audit in
 [`docs/BOOTSTRAP.md`](docs/BOOTSTRAP.md#verification-and-audit-commands) confirms
@@ -181,8 +189,8 @@ will access AWS through IAM Identity Center or an equivalent federated role.
 
 1. Secure data foundation: KMS, lake/artifact/query buckets, SQS/DLQs, DynamoDB, and secret containers.
 2. Identity boundary: DataEngineer permission set and four responsibility-based runtime roles.
-3. Private network and encrypted Redshift Serverless.
-4. Glue Catalog, Athena, workload patterns, and CloudWatch observability.
+3. Glue Catalog, cost-controlled Athena, private networking, and capped Redshift Serverless.
+4. Workload patterns, Gold loading, and CloudWatch observability.
 5. Live positive and negative IAM simulations plus deployed-resource checks.
 
 Changes use Conventional Commits, for example `feat: add secure data foundation`.
