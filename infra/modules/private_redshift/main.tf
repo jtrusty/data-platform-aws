@@ -113,9 +113,11 @@ resource "aws_redshiftserverless_workgroup" "analytics" {
   security_group_ids   = [aws_security_group.redshift.id]
   subnet_ids           = [for subnet in aws_subnet.redshift : subnet.id]
 
+  # AI-driven scaling can allocate billable extra compute and is not recommended
+  # at 4 RPU. The API rejects a level unless the target is enabled, so only the
+  # status is set here.
   price_performance_target {
     enabled = false
-    level   = 1
   }
 
   config_parameter {

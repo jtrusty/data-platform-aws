@@ -97,8 +97,7 @@ run "creates_private_cost_capped_redshift" {
       aws_redshiftserverless_workgroup.analytics.max_capacity == 4 &&
       aws_redshiftserverless_workgroup.analytics.port == 5439 &&
       length(aws_redshiftserverless_workgroup.analytics.subnet_ids) == 3 &&
-      !one(aws_redshiftserverless_workgroup.analytics.price_performance_target).enabled &&
-      one(aws_redshiftserverless_workgroup.analytics.price_performance_target).level == 1
+      !one(aws_redshiftserverless_workgroup.analytics.price_performance_target).enabled
     )
     error_message = "Redshift must remain private, cap at 4 RPU, and disable billable AI-driven scaling."
   }
