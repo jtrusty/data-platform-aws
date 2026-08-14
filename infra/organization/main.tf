@@ -1,4 +1,6 @@
 locals {
+  alert_email = var.alert_email == null ? null : (trimspace(var.alert_email) == "" ? null : var.alert_email)
+
   tags = {
     Environment = "organization"
     ManagedBy   = "terraform"
@@ -20,7 +22,7 @@ module "identity_center_access" {
 module "organization_audit" {
   source = "../modules/organization_audit"
 
-  alert_email         = var.alert_email
+  alert_email         = local.alert_email
   enable_security_hub = var.enable_security_hub
   monthly_budget_usd  = var.monthly_budget_usd
   tags                = local.tags

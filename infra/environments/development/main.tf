@@ -15,6 +15,10 @@ locals {
   runtime_boundary_arn     = "arn:aws:iam::${var.aws_account_id}:policy/bootstrap/jtrusty-data-platform-runtime-boundary-${local.environment}"
   config_recorder_role_arn = "arn:aws:iam::${var.aws_account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
 
+  # CI supplies this from a GitHub Environment secret. An unset secret arrives
+  # as an empty string rather than null, which must not fail validation.
+  alert_email = var.alert_email == null ? null : (trimspace(var.alert_email) == "" ? null : var.alert_email)
+
   tags = {
     Environment = local.environment
     ManagedBy   = "terraform"
@@ -92,7 +96,7 @@ module "platform_observability" {
   aws_account_id             = var.aws_account_id
   environment                = local.environment
   resource_prefix            = local.resource_prefix
-  alert_email                = var.alert_email
+  alert_email                = local.alert_email
   monthly_budget_usd         = var.monthly_budget_usd
   athena_workgroup_name      = module.athena_analytics.workgroup_name
   athena_monthly_bytes_limit = var.athena_monthly_bytes_limit
