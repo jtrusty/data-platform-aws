@@ -129,8 +129,8 @@ run "data_engineer_has_no_admin_escape" {
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "sqs:us-east-2:991278600180:data-platform-production-*"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "kms:Decrypt"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "DenyProductionStateKey"),
-      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "dynamodb:CreateTable"),
-      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "sqs:CreateQueue"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "dynamodb:*"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "sqs:*"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "athena:*"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "athena:us-east-2:555044956444:datacatalog/AwsDataCatalog"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "states:*"),
@@ -141,7 +141,9 @@ run "data_engineer_has_no_admin_escape" {
 
   assert {
     condition = alltrue([
-      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "sqs:*Message*"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectDurabilityAndRetention"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectResourcePoliciesAndPublicAccess"),
+      strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "ProtectResourcePoliciesAndPublicAccess"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy, "ProtectDevelopmentBaselineQueues"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "ProtectProductionBaselineQueues"),
       strcontains(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy, "ProtectProductionMetadata"),
@@ -180,5 +182,27 @@ run "data_engineer_has_no_admin_escape" {
       length(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy) <= 10240
     )
     error_message = "Identity Center inline policies must fit the 10,240-byte non-whitespace permission-set quota."
+  }
+}
+
+# glue:* is scoped to the platform's own Glue resources, so the catalog-wide
+# security settings must be denied outright.
+run "security_boundary_stays_with_terraform" {
+  command = plan
+
+  assert {
+    condition = alltrue([
+      for policy in [
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy),
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy),
+        ] : anytrue([
+          for statement in policy.Statement :
+          statement.Sid == "ProtectResourcePoliciesAndPublicAccess" &&
+          statement.Effect == "Deny" &&
+          contains(statement.Action, "glue:PutResourcePolicy") &&
+          contains(statement.Action, "glue:PutDataCatalogEncryptionSettings")
+      ])
+    ])
+    error_message = "Resource policies and public-access controls decide who can reach platform data and must stay Terraform-owned."
   }
 }

@@ -48,25 +48,22 @@ locals {
     "states:List*",
   ]
 
+  # Engineers operate the platform's own resources freely, always bounded by the
+  # environment-prefixed ARNs these actions are attached to. What they must not
+  # touch is the configuration that defines the security, durability, or cost
+  # boundary, and that is denied explicitly in platform_boundary_denies rather
+  # than withheld action by action.
   data_engineer_resource_actions = [
     "athena:*",
-    "dynamodb:*Item*", "dynamodb:CreateTable", "dynamodb:DeleteTable", "dynamodb:Describe*",
-    "dynamodb:Query", "dynamodb:Scan", "dynamodb:TagResource", "dynamodb:UntagResource", "dynamodb:UpdateTable",
-    "glue:*Connection", "glue:*Crawler", "glue:*Database", "glue:*Job", "glue:*Partition", "glue:*Table",
-    "glue:Get*", "glue:StartJobRun", "glue:StopJobRun", "glue:TagResource", "glue:UntagResource",
-    "lambda:CreateFunction", "lambda:DeleteFunction", "lambda:Get*", "lambda:PublishVersion",
-    "lambda:TagResource", "lambda:UntagResource", "lambda:UpdateFunctionCode", "lambda:UpdateFunctionConfiguration",
-    "logs:FilterLogEvents", "logs:Get*", "logs:StartQuery", "logs:StopQuery",
-    "sqs:*Message*", "sqs:CreateQueue", "sqs:DeleteQueue", "sqs:GetQueueAttributes", "sqs:GetQueueUrl",
-    "sqs:ListDeadLetterSourceQueues", "sqs:ListQueueTags", "sqs:PurgeQueue", "sqs:TagQueue", "sqs:UntagQueue",
+    "dynamodb:*",
+    "glue:*",
+    "lambda:*",
+    "logs:*",
+    "sqs:*",
     "states:*",
   ]
 
-  data_engineer_s3_actions = [
-    "s3:AbortMultipartUpload", "s3:DeleteObject", "s3:GetBucketLocation", "s3:GetObject",
-    "s3:GetObjectAttributes", "s3:GetObjectVersion", "s3:ListBucket", "s3:ListBucketVersions",
-    "s3:ListMultipartUploadParts", "s3:PutObject", "s3:RestoreObject",
-  ]
+  data_engineer_s3_actions = ["s3:*"]
 
   # Sandbox and development share one set of statements. Emitting the identical
   # action lists twice previously consumed most of the 10,240-byte permission-set
@@ -112,9 +109,9 @@ locals {
       Resource = flatten([for environment in values(local.nonprod_environments) : ["arn:aws:s3:::${environment.prefix}-*", "arn:aws:s3:::${environment.prefix}-*/*"]])
     },
     {
-      Sid      = "ReadNonProdSecrets"
+      Sid      = "ManageNonProdSecrets"
       Effect   = "Allow"
-      Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue", "secretsmanager:ListSecretVersionIds"]
+      Action   = ["secretsmanager:*"]
       Resource = [for environment in values(local.nonprod_environments) : "arn:aws:secretsmanager:us-east-2:${environment.account_id}:secret:${environment.secret}/*"]
     },
     {
@@ -183,9 +180,9 @@ locals {
       ]
     },
     {
-      Sid      = "ReadProductionSecrets"
+      Sid      = "ManageProductionSecrets"
       Effect   = "Allow"
-      Action   = ["secretsmanager:DescribeSecret", "secretsmanager:GetSecretValue", "secretsmanager:ListSecretVersionIds"]
+      Action   = ["secretsmanager:*"]
       Resource = "arn:aws:secretsmanager:us-east-2:${local.production_environment.account_id}:secret:${local.production_environment.secret}/*"
     },
     {
@@ -218,6 +215,47 @@ locals {
   # would otherwise let an engineer delete the query cost cap or a catalog.
   # The matching region deny is attached as a customer-managed policy instead of
   # inline text so these documents stay inside the 10,240-byte quota.
+  # glue:* is granted on the platform's own Glue resources, so the catalog-wide
+  # security settings are denied explicitly. A catalog resource policy can grant
+  # another account access to the whole catalog.
+  platform_boundary_denies = [
+    {
+      Sid    = "ProtectResourcePoliciesAndPublicAccess"
+      Effect = "Deny"
+      Action = [
+        "dynamodb:PutResourcePolicy",
+        "glue:DeleteResourcePolicy",
+        "glue:PutDataCatalogEncryptionSettings",
+        "glue:PutResourcePolicy",
+        "lambda:*FunctionUrlConfig",
+        "lambda:AddPermission",
+        "s3:DeleteBucketPolicy",
+        "s3:PutBucketAcl",
+        "s3:PutBucketOwnershipControls",
+        "s3:PutBucketPolicy",
+        "s3:PutBucketPublicAccessBlock",
+        "s3:PutReplicationConfiguration",
+        "secretsmanager:*ResourcePolicy",
+        "secretsmanager:ReplicateSecretToRegions",
+        "sqs:AddPermission",
+        "sqs:RemovePermission",
+      ]
+      Resource = "*"
+    },
+    {
+      Sid    = "ProtectDurabilityAndRetention"
+      Effect = "Deny"
+      Action = [
+        "logs:DeleteRetentionPolicy",
+        "s3:DeleteBucket",
+        "s3:PutBucketVersioning",
+        "s3:PutEncryptionConfiguration",
+        "s3:PutLifecycleConfiguration",
+      ]
+      Resource = "*"
+    },
+  ]
+
   terraform_owned_analytics_denies = {
     for name, environment in local.protected_environments : name => [
       {
@@ -310,6 +348,7 @@ locals {
       local.passrole_statements_nonprod,
       local.protected_development_resources,
       local.terraform_owned_analytics_denies.development,
+      local.platform_boundary_denies,
     )
   })
 
@@ -322,6 +361,7 @@ locals {
       local.passrole_statements_production,
       local.protected_production_resources,
       local.terraform_owned_analytics_denies.production,
+      local.platform_boundary_denies,
     )
   })
 
