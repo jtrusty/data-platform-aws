@@ -48,7 +48,7 @@ Current official pricing references:
 | Redshift monthly compute cutoff | 16 RPU-hours | 16 RPU-hours | 16 RPU-hours |
 | Redshift audit-log retention | 7 days | 14 days | 30 days |
 | Current artifact retention | 30 days | 90 days | 365 days |
-| Noncurrent Bronze/artifact versions | 7 days | 30 days | 90 days |
+| Noncurrent Bronze/artifact versions | 7 days | 7 days | 30 days |
 | DynamoDB capacity | 1 RCU / 1 WCU | 1 RCU / 1 WCU | 1 RCU / 1 WCU |
 | DynamoDB PITR | Off | Off | On |
 | DynamoDB deletion protection | Off | On | On |
