@@ -1,3 +1,5 @@
+aws_account_id = "555044956444"
+vpc_cidr       = "10.40.0.0/16"
 # Disposable, lowest-cost profile. This file contains configuration only;
 # credentials and secret values must never be added to committed tfvars.
 force_destroy_buckets                 = true

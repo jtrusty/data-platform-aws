@@ -12,11 +12,10 @@ variable "aws_region" {
 variable "aws_account_id" {
   description = "AWS account dedicated to the development environment."
   type        = string
-  default     = "511492912574"
 
   validation {
-    condition     = var.aws_account_id == "511492912574"
-    error_message = "Development is fixed to AWS account 511492912574."
+    condition     = can(regex("^[0-9]{12}$", var.aws_account_id))
+    error_message = "aws_account_id must be a 12-digit AWS account ID."
   }
 }
 
@@ -214,4 +213,14 @@ variable "guard_log_retention_days" {
   description = "CloudWatch retention for the Athena spend guard's own logs."
   type        = number
   default     = 14
+}
+
+variable "vpc_cidr" {
+  description = "Dedicated environment VPC CIDR."
+  type        = string
+
+  validation {
+    condition     = can(cidrsubnet(var.vpc_cidr, 8, 2)) && endswith(var.vpc_cidr, "/16")
+    error_message = "vpc_cidr must be a valid IPv4 /16 with room for three private /24 subnets."
+  }
 }

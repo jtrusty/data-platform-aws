@@ -11,7 +11,6 @@ locals {
   environment              = "development"
   resource_prefix          = "data-platform-${local.environment}"
   secret_namespace         = "data-platform/${local.environment}"
-  vpc_cidr                 = "10.50.0.0/16"
   runtime_boundary_arn     = "arn:aws:iam::${var.aws_account_id}:policy/bootstrap/jtrusty-data-platform-runtime-boundary-${local.environment}"
   config_recorder_role_arn = "arn:aws:iam::${var.aws_account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
 
@@ -77,7 +76,7 @@ module "private_redshift" {
   availability_zones          = var.analytics_availability_zones
   environment                 = local.environment
   resource_prefix             = local.resource_prefix
-  vpc_cidr                    = local.vpc_cidr
+  vpc_cidr                    = var.vpc_cidr
   redshift_role_arn           = module.data_foundation.runtime_role_arns.redshift
   silver_bucket_arn           = module.data_foundation.bucket_arns.silver
   base_capacity               = var.redshift_base_capacity

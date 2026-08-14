@@ -10,7 +10,7 @@ locals {
 module "state_backend" {
   source = "../../modules/state_backend"
 
-  account_id  = "699599381258"
+  account_id  = var.account_id
   environment = "organization"
   tags        = local.tags
 }

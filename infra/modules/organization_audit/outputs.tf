@@ -37,3 +37,13 @@ output "security_hub_enabled" {
   description = "Whether Security Hub is enabled in the management account."
   value       = var.enable_security_hub
 }
+
+output "audit_bucket_arn" {
+  description = "Audit bucket ARN that member-account trails deliver into."
+  value       = local.bucket_arn
+}
+
+output "organization_trail" {
+  description = "Whether one organization-wide trail covers every account."
+  value       = var.organization_trail
+}

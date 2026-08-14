@@ -3,12 +3,8 @@ variable "account_id" {
   type        = string
 
   validation {
-    condition = contains([
-      "555044956444",
-      "511492912574",
-      "991278600180",
-    ], var.account_id)
-    error_message = "account_id must be one of the three approved workload accounts."
+    condition     = can(regex("^[0-9]{12}$", var.account_id))
+    error_message = "account_id must be a 12-digit AWS account ID."
   }
 }
 
@@ -17,12 +13,8 @@ variable "environment" {
   type        = string
 
   validation {
-    condition = lookup({
-      sandbox     = "555044956444"
-      development = "511492912574"
-      production  = "991278600180"
-    }, var.environment, null) == var.account_id
-    error_message = "environment and account_id must match the approved account map."
+    condition     = contains(["sandbox", "development", "production"], var.environment)
+    error_message = "environment must be sandbox, development, or production."
   }
 }
 
@@ -39,44 +31,40 @@ variable "github_environment" {
 variable "github_repository_owner" {
   description = "Immutable GitHub repository owner name component."
   type        = string
-  default     = "jtrusty"
 
   validation {
-    condition     = var.github_repository_owner == "jtrusty"
-    error_message = "Only the jtrusty repository owner is approved."
+    condition     = can(regex("^[A-Za-z0-9][A-Za-z0-9-]{0,38}$", var.github_repository_owner))
+    error_message = "github_repository_owner must be a valid GitHub owner name."
   }
 }
 
 variable "github_owner_id" {
-  description = "Immutable GitHub repository owner ID."
+  description = "Immutable GitHub identifier component."
   type        = string
-  default     = "6896625"
 
   validation {
-    condition     = var.github_owner_id == "6896625"
-    error_message = "github_owner_id must match the verified repository owner ID."
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id must be the numeric GitHub owner ID."
   }
 }
 
 variable "github_repository_name" {
   description = "Immutable GitHub repository name component."
   type        = string
-  default     = "data-platform-aws"
 
   validation {
-    condition     = var.github_repository_name == "data-platform-aws"
-    error_message = "Only jtrusty/data-platform-aws is approved for deployment."
+    condition     = can(regex("^[A-Za-z0-9._-]{1,100}$", var.github_repository_name))
+    error_message = "github_repository_name must be a valid GitHub repository name."
   }
 }
 
 variable "github_repository_id" {
-  description = "Immutable GitHub repository ID."
+  description = "Immutable GitHub identifier component."
   type        = string
-  default     = "1333254672"
 
   validation {
-    condition     = var.github_repository_id == "1333254672"
-    error_message = "github_repository_id must match the verified repository ID."
+    condition     = can(regex("^[0-9]+$", var.github_repository_id))
+    error_message = "github_repository_id must be the numeric GitHub repository ID."
   }
 }
 

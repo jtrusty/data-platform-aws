@@ -7,6 +7,7 @@ mock_provider "aws" {
 }
 
 variables {
+  management_account_id = "699599381258"
   tags = {
     Environment = "organization"
     ManagedBy   = "terraform"
@@ -61,7 +62,7 @@ run "organization_trail_is_complete_and_cheap" {
   assert {
     condition = (
       one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "DenyInsecureTransport"]).Effect == "Deny" &&
-      one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "AWSCloudTrailWrite"]).Condition.StringEquals["aws:SourceArn"] == "arn:aws:cloudtrail:us-east-2:699599381258:trail/jtrusty-data-platform-organization" &&
+      toset(one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "AWSCloudTrailWrite"]).Condition.StringEquals["aws:SourceArn"]) == toset(["arn:aws:cloudtrail:us-east-2:699599381258:trail/jtrusty-data-platform-organization"]) &&
       toset(one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "AWSCloudTrailWrite"]).Resource) == toset([
         "arn:aws:s3:::jtrusty-dp-audit-699599381258-us-east-2/AWSLogs/699599381258/*",
         "arn:aws:s3:::jtrusty-dp-audit-699599381258-us-east-2/AWSLogs/o-000000000000/*",
@@ -92,4 +93,49 @@ run "reject_unrelated_data_event_buckets" {
   }
 
   expect_failures = [var.state_bucket_data_events]
+}
+
+# An organization that does not own every account in its organization audits
+# only the platform accounts, each delivering its own trail into this bucket.
+run "member_account_trails_replace_the_organization_trail" {
+  command = plan
+
+  variables {
+    organization_trail = false
+    member_account_ids = ["555044956444", "511492912574"]
+  }
+
+  assert {
+    condition     = !aws_cloudtrail.organization.is_organization_trail
+    error_message = "Scoped auditing must not create an organization-wide trail."
+  }
+
+  assert {
+    condition = toset(one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "AWSCloudTrailWrite"]).Resource) == toset([
+      "arn:aws:s3:::jtrusty-dp-audit-699599381258-us-east-2/AWSLogs/699599381258/*",
+      "arn:aws:s3:::jtrusty-dp-audit-699599381258-us-east-2/AWSLogs/555044956444/*",
+      "arn:aws:s3:::jtrusty-dp-audit-699599381258-us-east-2/AWSLogs/511492912574/*",
+    ])
+    error_message = "Only the named member accounts may deliver trails into the audit bucket."
+  }
+
+  assert {
+    condition = toset(one([for statement in jsondecode(aws_s3_bucket_policy.audit.policy).Statement : statement if statement.Sid == "AWSCloudTrailWrite"]).Condition.StringEquals["aws:SourceArn"]) == toset([
+      "arn:aws:cloudtrail:us-east-2:699599381258:trail/jtrusty-data-platform-organization",
+      "arn:aws:cloudtrail:us-east-2:555044956444:trail/jtrusty-data-platform-organization",
+      "arn:aws:cloudtrail:us-east-2:511492912574:trail/jtrusty-data-platform-organization",
+    ])
+    error_message = "Each authorized trail must be named exactly, not left open to any trail in the account."
+  }
+}
+
+run "reject_malformed_member_account" {
+  command = plan
+
+  variables {
+    organization_trail = false
+    member_account_ids = ["not-an-account"]
+  }
+
+  expect_failures = [var.member_account_ids]
 }
