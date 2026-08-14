@@ -97,7 +97,8 @@ run "creates_private_cost_capped_redshift" {
       aws_redshiftserverless_workgroup.analytics.max_capacity == 4 &&
       aws_redshiftserverless_workgroup.analytics.port == 5439 &&
       length(aws_redshiftserverless_workgroup.analytics.subnet_ids) == 3 &&
-      !one(aws_redshiftserverless_workgroup.analytics.price_performance_target).enabled
+      !one(aws_redshiftserverless_workgroup.analytics.price_performance_target).enabled &&
+      length(aws_redshiftserverless_workgroup.analytics.config_parameter) == 9
     )
     error_message = "Redshift must remain private, cap at 4 RPU, and disable billable AI-driven scaling."
   }
@@ -144,4 +145,34 @@ run "rejects_non_integer_usage_limit" {
   }
 
   expect_failures = [var.monthly_rpu_hours]
+}
+
+# Redshift Serverless returns every parameter it holds, so declaring only the
+# platform's own left the AWS defaults looking like pending deletions on every
+# plan. The full set must stay declared or drift detection never converges.
+run "declares_every_workgroup_parameter" {
+  command = plan
+
+  assert {
+    condition = toset([for parameter in aws_redshiftserverless_workgroup.analytics.config_parameter : parameter.parameter_key]) == toset([
+      "auto_mv",
+      "datestyle",
+      "enable_case_sensitive_identifier",
+      "enable_user_activity_logging",
+      "max_query_execution_time",
+      "query_group",
+      "require_ssl",
+      "search_path",
+      "use_fips_ssl",
+    ])
+    error_message = "Every workgroup parameter Redshift returns must be declared, or each plan shows the AWS defaults as deletions."
+  }
+
+  assert {
+    condition = alltrue([
+      for parameter in aws_redshiftserverless_workgroup.analytics.config_parameter :
+      parameter.parameter_value == "true" if parameter.parameter_key == "require_ssl"
+    ])
+    error_message = "TLS must remain required on the workgroup."
+  }
 }

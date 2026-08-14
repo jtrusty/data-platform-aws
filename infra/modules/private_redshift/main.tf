@@ -4,6 +4,21 @@ locals {
     for index, zone in var.availability_zones : zone => cidrsubnet(var.vpc_cidr, 8, index)
   }
   log_types = toset(["connectionlog", "useractivitylog", "userlog"])
+
+  redshift_default_parameters = {
+    auto_mv                          = "true"
+    datestyle                        = "ISO, MDY"
+    enable_case_sensitive_identifier = "false"
+    query_group                      = "default"
+    search_path                      = "$user, public"
+    use_fips_ssl                     = "false"
+  }
+
+  redshift_platform_parameters = {
+    enable_user_activity_logging = "true"
+    max_query_execution_time     = tostring(var.max_query_execution_seconds)
+    require_ssl                  = "true"
+  }
 }
 
 resource "aws_vpc" "analytics" {
@@ -120,19 +135,19 @@ resource "aws_redshiftserverless_workgroup" "analytics" {
     enabled = false
   }
 
-  config_parameter {
-    parameter_key   = "enable_user_activity_logging"
-    parameter_value = "true"
-  }
+  # Redshift Serverless returns every configuration parameter, including the
+  # ones AWS defaults. Declaring only the platform's three left the AWS defaults
+  # showing as pending deletions on every plan, which never converged and would
+  # have failed drift detection nightly. The defaults are declared at their
+  # current values so the diff is empty while the platform's own controls stay
+  # enforced rather than ignored.
+  dynamic "config_parameter" {
+    for_each = merge(local.redshift_default_parameters, local.redshift_platform_parameters)
 
-  config_parameter {
-    parameter_key   = "max_query_execution_time"
-    parameter_value = tostring(var.max_query_execution_seconds)
-  }
-
-  config_parameter {
-    parameter_key   = "require_ssl"
-    parameter_value = "true"
+    content {
+      parameter_key   = config_parameter.key
+      parameter_value = config_parameter.value
+    }
   }
 
   tags = merge(var.tags, { Purpose = "gold-analytics" })
