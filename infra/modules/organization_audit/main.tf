@@ -130,12 +130,18 @@ resource "aws_s3_bucket_policy" "audit" {
           StringEquals = { "aws:SourceArn" = local.trail_arn }
         }
       },
+      # An organization trail delivers member-account logs under the organization
+      # ID and the management account's own logs under its account ID, and
+      # CreateTrail rejects a policy that is missing either path.
       {
         Sid       = "AWSCloudTrailWrite"
         Effect    = "Allow"
         Principal = { Service = "cloudtrail.amazonaws.com" }
         Action    = "s3:PutObject"
-        Resource  = "${local.bucket_arn}/AWSLogs/${data.aws_organizations_organization.current.id}/*"
+        Resource = [
+          "${local.bucket_arn}/AWSLogs/${var.management_account_id}/*",
+          "${local.bucket_arn}/AWSLogs/${data.aws_organizations_organization.current.id}/*",
+        ]
         Condition = {
           StringEquals = { "aws:SourceArn" = local.trail_arn }
         }
