@@ -38,10 +38,10 @@
 | <a name="input_account_id"></a> [account\_id](#input\_account\_id) | Exact workload account ID. | `string` | n/a | yes |
 | <a name="input_environment"></a> [environment](#input\_environment) | Exact workload environment. | `string` | n/a | yes |
 | <a name="input_github_environment"></a> [github\_environment](#input\_github\_environment) | GitHub Environment allowed to assume the deployment role. | `string` | n/a | yes |
-| <a name="input_github_owner_id"></a> [github\_owner\_id](#input\_github\_owner\_id) | Immutable GitHub repository owner ID. | `string` | `"6896625"` | no |
-| <a name="input_github_repository_id"></a> [github\_repository\_id](#input\_github\_repository\_id) | Immutable GitHub repository ID. | `string` | `"1333254672"` | no |
-| <a name="input_github_repository_name"></a> [github\_repository\_name](#input\_github\_repository\_name) | Immutable GitHub repository name component. | `string` | `"data-platform-aws"` | no |
-| <a name="input_github_repository_owner"></a> [github\_repository\_owner](#input\_github\_repository\_owner) | Immutable GitHub repository owner name component. | `string` | `"jtrusty"` | no |
+| <a name="input_github_owner_id"></a> [github\_owner\_id](#input\_github\_owner\_id) | Immutable GitHub identifier component. | `string` | n/a | yes |
+| <a name="input_github_repository_id"></a> [github\_repository\_id](#input\_github\_repository\_id) | Immutable GitHub identifier component. | `string` | n/a | yes |
+| <a name="input_github_repository_name"></a> [github\_repository\_name](#input\_github\_repository\_name) | Immutable GitHub repository name component. | `string` | n/a | yes |
+| <a name="input_github_repository_owner"></a> [github\_repository\_owner](#input\_github\_repository\_owner) | Immutable GitHub repository owner name component. | `string` | n/a | yes |
 | <a name="input_manage_detective_service_linked_roles"></a> [manage\_detective\_service\_linked\_roles](#input\_manage\_detective\_service\_linked\_roles) | Create the account-wide AWS Config, GuardDuty, and Security Hub service-linked roles. Set to false for an account where they already exist. | `bool` | `true` | no |
 | <a name="input_manage_redshift_service_linked_role"></a> [manage\_redshift\_service\_linked\_role](#input\_manage\_redshift\_service\_linked\_role) | Create the account-wide Redshift service-linked role. Set to false for an account where it already exists; an existing managed role must be removed from state rather than destroyed. | `bool` | `true` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Mandatory bootstrap ownership tags. | `map(string)` | n/a | yes |

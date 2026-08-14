@@ -60,6 +60,30 @@ mise run security
 mise run secrets
 ```
 
+## Reusing this platform in another organization
+
+Account IDs, VPC CIDRs, GitHub identifiers, Identity Center identifiers, and
+group IDs are committed configuration in `accounts.auto.tfvars` and
+`foundation.auto.tfvars`, not values pinned inside modules. Validation checks
+their shape rather than their value, so another organization can adopt this
+platform by editing tfvars.
+
+Three assumptions still need a decision when adopting it:
+
+1. **Identity Center is organization-wide.** The instance cannot be created by
+   Terraform and must already be enabled; the module discovers it when
+   `identity_center_instance_arn` is null. Permission set names can be
+   namespaced with `permission_set_prefix`, and the groups can either be
+   supplied by ID or created with `create_groups`.
+2. **CloudTrail organization trails cover every account** and cannot be scoped
+   to a subset. Where the platform does not own the whole organization, set
+   `organization_trail = false` and list the platform accounts in
+   `member_account_ids`; each then delivers its own trail into the shared audit
+   bucket, and the first copy of management events stays free per account.
+3. **Resource names carry the `jtrusty-data-platform` prefix.** State buckets,
+   boundaries, and the human policies use it; `human_policy_prefix` covers the
+   Identity Center references.
+
 ## Environment and account model
 
 An AWS account is the closest AWS equivalent to an Azure subscription. We use

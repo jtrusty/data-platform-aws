@@ -20,7 +20,7 @@ output "secret_namespace" {
 
 output "vpc_cidr" {
   description = "Dedicated environment VPC CIDR."
-  value       = local.vpc_cidr
+  value       = var.vpc_cidr
 }
 
 output "foundation" {

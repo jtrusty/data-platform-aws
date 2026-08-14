@@ -166,12 +166,25 @@ run "exact_github_trust" {
   }
 }
 
-run "reject_wrong_repository" {
+# Repository identity is supplied by the bootstrap root rather than pinned in
+# the module, so another organization can adopt this platform. The trust policy
+# still requires the exact immutable owner, repository, and environment claims.
+run "reject_malformed_repository" {
   command = plan
 
   variables {
-    github_repository_name = "other-repository"
+    github_repository_name = "not a repository name"
   }
 
   expect_failures = [var.github_repository_name]
+}
+
+run "reject_non_numeric_repository_id" {
+  command = plan
+
+  variables {
+    github_repository_id = "abc"
+  }
+
+  expect_failures = [var.github_repository_id]
 }

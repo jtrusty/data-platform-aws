@@ -1,3 +1,5 @@
+aws_account_id = "511492912574"
+vpc_cidr       = "10.50.0.0/16"
 # Persistent, low-cost CI profile. This file contains configuration only;
 # credentials and secret values must never be added to committed tfvars.
 force_destroy_buckets                 = false

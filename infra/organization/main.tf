@@ -12,9 +12,13 @@ locals {
 module "identity_center_access" {
   source = "../modules/identity_center_access"
 
-  organization_admin_user_ids = [
-    "c1bba500-a0e1-70e7-52c2-5101377f116d",
-  ]
+  management_account_id       = var.management_account_id
+  workload_accounts           = var.workload_accounts
+  organization_admin_user_ids = var.organization_admin_user_ids
+  instance_arn                = var.identity_center_instance_arn
+  identity_store_id           = var.identity_store_id
+  platform_admins_group_id    = var.platform_admins_group_id
+  data_engineers_group_id     = var.data_engineers_group_id
 }
 
 # Organization-wide management-event audit. Management events are free for the
@@ -22,10 +26,13 @@ module "identity_center_access" {
 module "organization_audit" {
   source = "../modules/organization_audit"
 
-  alert_email         = local.alert_email
-  enable_security_hub = var.enable_security_hub
-  monthly_budget_usd  = var.monthly_budget_usd
-  tags                = local.tags
+  management_account_id = var.management_account_id
+  alert_email           = local.alert_email
+  enable_security_hub   = var.enable_security_hub
+  monthly_budget_usd    = var.monthly_budget_usd
+  organization_trail    = var.organization_trail
+  member_account_ids    = values(var.workload_accounts)
+  tags                  = local.tags
 }
 
 output "permission_set_arns" {

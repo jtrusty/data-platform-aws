@@ -67,7 +67,7 @@ for environment in sandbox development production; do
   rg -F "key          = \"bootstrap/terraform.tfstate\"" "$bootstrap/backend.hcl"
   rg -F 'kms_key_id' "$bootstrap/backend.hcl"
 done
-rg -F 'allowed_account_ids = ["699599381258"]' infra/organization/versions.tf
+rg -F "allowed_account_ids = [var.management_account_id]" infra/organization/versions.tf
 rg -F 'key          = "organization/terraform.tfstate"' infra/organization/backend.hcl
 rg -F 'kms_key_id' infra/organization/backend.hcl
 rg -F 'key          = "bootstrap/management/terraform.tfstate"' infra/bootstrap/management/backend.hcl
@@ -126,7 +126,7 @@ rg -F 'enforce_workgroup_configuration    = true' infra/modules/athena_analytics
 
 # Audit coverage must stay on and stay cheap.
 audit_module="infra/modules/organization_audit"
-rg -F 'is_organization_trail         = true' "$audit_module/main.tf"
+rg -F 'is_organization_trail         = var.organization_trail' "$audit_module/main.tf"
 rg -F 'enable_log_file_validation    = true' "$audit_module/main.tf"
 rg -F 'sse_algorithm = "AES256"' "$audit_module/main.tf"
 if rg -F 'aws_cloudwatch_log_group' "$audit_module/main.tf"; then

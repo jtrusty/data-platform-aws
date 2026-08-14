@@ -28,3 +28,4 @@ infra/bootstrap/*/backend.tf
 .vscode/
 .DS_Store
 *.zip
+!**/accounts.auto.tfvars

@@ -6,6 +6,21 @@ locals {
   bucket_arn               = "arn:aws:s3:::${local.bucket_name}"
   trail_arn                = "arn:aws:cloudtrail:us-east-2:${var.management_account_id}:trail/${var.trail_name}"
   config_recorder_role_arn = "arn:aws:iam::${var.management_account_id}:role/aws-service-role/config.amazonaws.com/AWSServiceRoleForConfig"
+
+  # An organization trail writes member logs under the organization ID; separate
+  # per-account trails write under each account ID. Both always include the
+  # management account's own path.
+  trail_write_resources = concat(
+    ["${local.bucket_arn}/AWSLogs/${var.management_account_id}/*"],
+    var.organization_trail
+    ? ["${local.bucket_arn}/AWSLogs/${data.aws_organizations_organization.current.id}/*"]
+    : [for account_id in var.member_account_ids : "${local.bucket_arn}/AWSLogs/${account_id}/*"],
+  )
+
+  trail_source_arns = concat(
+    [local.trail_arn],
+    var.organization_trail ? [] : [for account_id in var.member_account_ids : "arn:aws:cloudtrail:us-east-2:${account_id}:trail/${var.trail_name}"],
+  )
 }
 
 data "aws_organizations_organization" "current" {}
@@ -138,12 +153,9 @@ resource "aws_s3_bucket_policy" "audit" {
         Effect    = "Allow"
         Principal = { Service = "cloudtrail.amazonaws.com" }
         Action    = "s3:PutObject"
-        Resource = [
-          "${local.bucket_arn}/AWSLogs/${var.management_account_id}/*",
-          "${local.bucket_arn}/AWSLogs/${data.aws_organizations_organization.current.id}/*",
-        ]
+        Resource  = local.trail_write_resources
         Condition = {
-          StringEquals = { "aws:SourceArn" = local.trail_arn }
+          StringEquals = { "aws:SourceArn" = local.trail_source_arns }
         }
       },
     ]
@@ -163,7 +175,7 @@ resource "aws_cloudtrail" "organization" {
   enable_log_file_validation    = true
   include_global_service_events = true
   is_multi_region_trail         = true
-  is_organization_trail         = true
+  is_organization_trail         = var.organization_trail
   tags                          = merge(var.tags, { Purpose = "organization-audit" })
 
   dynamic "event_selector" {

@@ -1,11 +1,10 @@
 variable "management_account_id" {
-  description = "Organizations management account that owns the organization trail."
+  description = "Organizations management account that owns the audit trail and bucket."
   type        = string
-  default     = "699599381258"
 
   validation {
-    condition     = var.management_account_id == "699599381258"
-    error_message = "The organization trail is fixed to management account 699599381258."
+    condition     = can(regex("^[0-9]{12}$", var.management_account_id))
+    error_message = "management_account_id must be a 12-digit AWS account ID."
   }
 }
 
@@ -53,6 +52,27 @@ variable "state_bucket_data_events" {
   validation {
     condition     = alltrue([for arn in var.state_bucket_data_events : can(regex("^arn:aws:s3:::jtrusty-dp-tfstate-[a-z]+-[0-9]{12}-us-east-2$", arn))])
     error_message = "state_bucket_data_events must contain only jtrusty-dp-tfstate-* bucket ARNs."
+  }
+}
+
+# CloudTrail organization trails cover every account in the organization and
+# cannot be scoped to a subset. An organization that only wants the platform
+# accounts audited sets this to false and lets each managed account deliver its
+# own trail into this bucket.
+variable "organization_trail" {
+  description = "Create one organization-wide trail. False creates a management-account trail only and authorizes the listed member accounts to deliver their own."
+  type        = bool
+  default     = true
+}
+
+variable "member_account_ids" {
+  description = "Accounts allowed to deliver their own trails into the audit bucket when organization_trail is false."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for account_id in var.member_account_ids : can(regex("^[0-9]{12}$", account_id))])
+    error_message = "member_account_ids must all be 12-digit AWS account IDs."
   }
 }
 

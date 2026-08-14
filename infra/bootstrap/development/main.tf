@@ -10,13 +10,13 @@ locals {
 module "account_bootstrap" {
   source = "../../modules/account_bootstrap"
 
-  account_id              = "511492912574"
+  account_id              = var.account_id
   environment             = "development"
   github_environment      = "development"
-  github_owner_id         = "6896625"
-  github_repository_id    = "1333254672"
-  github_repository_name  = "data-platform-aws"
-  github_repository_owner = "jtrusty"
+  github_owner_id         = var.github_owner_id
+  github_repository_id    = var.github_repository_id
+  github_repository_name  = var.github_repository_name
+  github_repository_owner = var.github_repository_owner
   tags                    = local.tags
 }
 

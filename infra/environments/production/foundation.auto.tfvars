@@ -1,3 +1,5 @@
+aws_account_id = "991278600180"
+vpc_cidr       = "10.60.0.0/16"
 # Production safety profile. This file contains configuration only;
 # credentials and secret values must never be added to committed tfvars.
 force_destroy_buckets                 = false

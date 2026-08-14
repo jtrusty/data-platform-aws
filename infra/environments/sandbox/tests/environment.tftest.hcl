@@ -47,14 +47,27 @@ run "sandbox_environment_contract" {
   }
 }
 
-run "reject_invalid_account_id" {
+# The account is supplied by committed tfvars rather than pinned in code so the
+# platform can be deployed into another organization. The provider's
+# allowed_account_ids still refuses credentials for a different account.
+run "reject_malformed_account_id" {
   command = plan
 
   variables {
-    aws_account_id = "511492912574"
+    aws_account_id = "not-an-account"
   }
 
   expect_failures = [var.aws_account_id]
+}
+
+run "reject_malformed_vpc_cidr" {
+  command = plan
+
+  variables {
+    vpc_cidr = "10.40.0.0/24"
+  }
+
+  expect_failures = [var.vpc_cidr]
 }
 
 run "reject_wrong_region" {

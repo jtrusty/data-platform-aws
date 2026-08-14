@@ -44,9 +44,11 @@ No modules.
 | <a name="input_enable_security_hub"></a> [enable\_security\_hub](#input\_enable\_security\_hub) | Enable Security Hub with the foundational standard in the management account. Off by default because it is billed per control check. | `bool` | `false` | no |
 | <a name="input_log_retention_days"></a> [log\_retention\_days](#input\_log\_retention\_days) | Days to retain organization CloudTrail objects; storage is the only recurring cost of this trail. | `number` | `365` | no |
 | <a name="input_manage_detective_service_linked_roles"></a> [manage\_detective\_service\_linked\_roles](#input\_manage\_detective\_service\_linked\_roles) | Create the management account's Config, GuardDuty, and Security Hub service-linked roles. | `bool` | `true` | no |
-| <a name="input_management_account_id"></a> [management\_account\_id](#input\_management\_account\_id) | Organizations management account that owns the organization trail. | `string` | `"699599381258"` | no |
+| <a name="input_management_account_id"></a> [management\_account\_id](#input\_management\_account\_id) | Organizations management account that owns the audit trail and bucket. | `string` | n/a | yes |
+| <a name="input_member_account_ids"></a> [member\_account\_ids](#input\_member\_account\_ids) | Accounts allowed to deliver their own trails into the audit bucket when organization\_trail is false. | `set(string)` | `[]` | no |
 | <a name="input_monthly_budget_usd"></a> [monthly\_budget\_usd](#input\_monthly\_budget\_usd) | Monthly cost budget for the management account. | `number` | `25` | no |
 | <a name="input_noncurrent_version_expiration_days"></a> [noncurrent\_version\_expiration\_days](#input\_noncurrent\_version\_expiration\_days) | Days to retain overwritten or deleted audit-log versions. | `number` | `30` | no |
+| <a name="input_organization_trail"></a> [organization\_trail](#input\_organization\_trail) | Create one organization-wide trail. False creates a management-account trail only and authorizes the listed member accounts to deliver their own. | `bool` | `true` | no |
 | <a name="input_state_bucket_data_events"></a> [state\_bucket\_data\_events](#input\_state\_bucket\_data\_events) | Terraform state bucket ARNs to record S3 object-level data events for; billed per event, empty by default. | `set(string)` | `[]` | no |
 | <a name="input_tags"></a> [tags](#input\_tags) | Mandatory organization audit tags. | `map(string)` | n/a | yes |
 | <a name="input_trail_name"></a> [trail\_name](#input\_trail\_name) | Organization CloudTrail name. | `string` | `"jtrusty-data-platform-organization"` | no |
@@ -56,10 +58,12 @@ No modules.
 | Name | Description |
 |------|-------------|
 | <a name="output_alert_topic_arn"></a> [alert\_topic\_arn](#output\_alert\_topic\_arn) | SNS topic receiving management-account budget alerts. |
+| <a name="output_audit_bucket_arn"></a> [audit\_bucket\_arn](#output\_audit\_bucket\_arn) | Audit bucket ARN that member-account trails deliver into. |
 | <a name="output_audit_bucket_name"></a> [audit\_bucket\_name](#output\_audit\_bucket\_name) | Organization audit log bucket name. |
 | <a name="output_guardduty_detector_id"></a> [guardduty\_detector\_id](#output\_guardduty\_detector\_id) | GuardDuty detector protecting the management account. |
 | <a name="output_log_retention_days"></a> [log\_retention\_days](#output\_log\_retention\_days) | Days audit objects are retained before expiration. |
 | <a name="output_monthly_budget_usd"></a> [monthly\_budget\_usd](#output\_monthly\_budget\_usd) | Management-account monthly cost budget in USD. |
+| <a name="output_organization_trail"></a> [organization\_trail](#output\_organization\_trail) | Whether one organization-wide trail covers every account. |
 | <a name="output_security_hub_enabled"></a> [security\_hub\_enabled](#output\_security\_hub\_enabled) | Whether Security Hub is enabled in the management account. |
 | <a name="output_trail_arn"></a> [trail\_arn](#output\_trail\_arn) | Organization CloudTrail ARN. |
 | <a name="output_trail_name"></a> [trail\_name](#output\_trail\_name) | Organization CloudTrail name. |
