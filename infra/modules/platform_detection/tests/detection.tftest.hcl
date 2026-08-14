@@ -53,30 +53,32 @@ run "detection_is_enabled_and_bounded" {
     error_message = "VPC flow logs must be delivered to S3 with the coarser aggregation interval."
   }
 
+  # Security Hub is billed per control check and stays off until a measured bill
+  # justifies it. The rest of detection does not depend on it.
+  assert {
+    condition = (
+      length(aws_securityhub_account.platform) == 0 &&
+      length(aws_securityhub_standards_subscription.foundational) == 0
+    )
+    error_message = "Security Hub must stay off by default."
+  }
+}
+
+run "security_hub_can_be_enabled" {
+  command = plan
+
+  variables {
+    enable_security_hub = true
+  }
+
   assert {
     condition = (
       length(aws_securityhub_account.platform) == 1 &&
       length(aws_securityhub_standards_subscription.foundational) == 1 &&
-      endswith(one(aws_securityhub_standards_subscription.foundational).standards_arn, "aws-foundational-security-best-practices/v/1.0.0")
-    )
-    error_message = "Security Hub must enable exactly the foundational standard."
-  }
-}
-
-run "security_hub_is_optional" {
-  command = plan
-
-  variables {
-    enable_security_hub = false
-  }
-
-  assert {
-    condition = (
-      length(aws_securityhub_account.platform) == 0 &&
-      length(aws_securityhub_standards_subscription.foundational) == 0 &&
+      endswith(one(aws_securityhub_standards_subscription.foundational).standards_arn, "aws-foundational-security-best-practices/v/1.0.0") &&
       aws_guardduty_detector.platform.enable
     )
-    error_message = "Disabling the per-check Security Hub charge must not disable the rest of detection."
+    error_message = "When enabled, Security Hub must subscribe exactly the foundational standard."
   }
 }
 

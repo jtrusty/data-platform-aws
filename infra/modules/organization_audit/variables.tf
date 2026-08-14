@@ -81,9 +81,9 @@ variable "monthly_budget_usd" {
 }
 
 variable "enable_security_hub" {
-  description = "Enable Security Hub with the foundational standard in the management account."
+  description = "Enable Security Hub with the foundational standard in the management account. Off by default because it is billed per control check."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "manage_detective_service_linked_roles" {

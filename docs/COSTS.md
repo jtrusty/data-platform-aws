@@ -175,13 +175,15 @@ production: about $0.50, $1, and $2.50 of scan at $5/TB.
 | GuardDuty, 4 accounts | ~$0.25/mo | Per million analyzed CloudTrail events |
 | VPC flow logs to S3 | ~$0.05/mo | Per GB stored; a no-NAT VPC produces very little |
 | AWS Config | ~$1-3/mo | Per configuration item and rule evaluation; recording is limited to an explicit resource-type list rather than all supported types |
-| Security Hub, 4 accounts | ~$8-24/mo | **Per control check.** The most expensive control here |
+| Security Hub | **off** | Per control check; roughly $2-6 per account per month if enabled |
 
 Security Hub is billed per security check, and the Foundational Security Best
-Practices standard runs a few hundred controls per account. Only that one
-standard is enabled; adding CIS would roughly double the charge for largely
-overlapping findings. Each environment can set `enable_security_hub = false`
-independently if the measured charge is not worth it.
+Practices standard runs a few hundred controls per account, so it would have
+been the largest line on an otherwise nearly free platform. It is off in every
+account, including management, and defaults to off in both modules. Turn it on
+per account with `enable_security_hub = true` once a measured bill justifies it;
+if it is enabled, only the foundational standard is subscribed, because adding
+CIS roughly doubles the charge for largely overlapping findings.
 
 Flow logs are delivered to S3 rather than CloudWatch Logs because log ingestion
 is billed per GB while S3 storage is not.

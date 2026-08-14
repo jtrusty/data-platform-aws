@@ -247,12 +247,14 @@ data events are off by default because they bill per event; the module accepts
 Terraform state bucket ARNs when an investigation needs object-level state
 access history.
 
-GuardDuty, AWS Config, Security Hub, and VPC flow logs are enabled in every
-account. Config records an explicit resource-type list rather than all supported
-types, flow logs deliver to S3 rather than per-GB CloudWatch Logs ingestion, and
-only the Foundational Security Best Practices standard is subscribed. Security
-Hub is billed per check and is the most expensive of these, so each environment
-can disable it independently.
+GuardDuty, AWS Config, and VPC flow logs are enabled in every account. Config
+records an explicit resource-type list rather than all supported types, and flow
+logs deliver to S3 rather than per-GB CloudWatch Logs ingestion.
+
+Security Hub is deliberately off in every account. It is billed per control
+check and would cost more than the rest of the platform combined at this stage;
+benchmark scoring is a later decision to be made against a measured bill, not a
+default. Its absence does not affect the trail, GuardDuty, Config, or flow logs.
 
 Budget and alarm notifications publish to a per-account SNS topic that only
 same-account Budgets and CloudWatch may write to, and never without TLS. The

@@ -104,9 +104,9 @@ variable "guardduty_publishing_frequency" {
 # Security Hub bills per control check. It is the most expensive control in this
 # module, so each environment decides independently.
 variable "enable_security_hub" {
-  description = "Enable Security Hub with the AWS Foundational Security Best Practices standard."
+  description = "Enable Security Hub with the AWS Foundational Security Best Practices standard. Off by default: it is billed per control check and is the most expensive control in this module."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "flow_log_traffic_type" {

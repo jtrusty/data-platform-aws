@@ -41,7 +41,7 @@ No modules.
 |------|-------------|------|---------|:--------:|
 | <a name="input_alert_email"></a> [alert\_email](#input\_alert\_email) | Address subscribed to management-account budget alerts. Supplied out of band; never committed. | `string` | `null` | no |
 | <a name="input_config_resource_types"></a> [config\_resource\_types](#input\_config\_resource\_types) | Resource types AWS Config records in the management account. | `set(string)` | <pre>[<br/>  "AWS::CloudTrail::Trail",<br/>  "AWS::IAM::Policy",<br/>  "AWS::IAM::Role",<br/>  "AWS::KMS::Key",<br/>  "AWS::S3::Bucket"<br/>]</pre> | no |
-| <a name="input_enable_security_hub"></a> [enable\_security\_hub](#input\_enable\_security\_hub) | Enable Security Hub with the foundational standard in the management account. | `bool` | `true` | no |
+| <a name="input_enable_security_hub"></a> [enable\_security\_hub](#input\_enable\_security\_hub) | Enable Security Hub with the foundational standard in the management account. Off by default because it is billed per control check. | `bool` | `false` | no |
 | <a name="input_log_retention_days"></a> [log\_retention\_days](#input\_log\_retention\_days) | Days to retain organization CloudTrail objects; storage is the only recurring cost of this trail. | `number` | `365` | no |
 | <a name="input_manage_detective_service_linked_roles"></a> [manage\_detective\_service\_linked\_roles](#input\_manage\_detective\_service\_linked\_roles) | Create the management account's Config, GuardDuty, and Security Hub service-linked roles. | `bool` | `true` | no |
 | <a name="input_management_account_id"></a> [management\_account\_id](#input\_management\_account\_id) | Organizations management account that owns the organization trail. | `string` | `"699599381258"` | no |

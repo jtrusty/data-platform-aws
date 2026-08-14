@@ -20,9 +20,10 @@ module "identity_center_access" {
 module "organization_audit" {
   source = "../modules/organization_audit"
 
-  alert_email        = var.alert_email
-  monthly_budget_usd = var.monthly_budget_usd
-  tags               = local.tags
+  alert_email         = var.alert_email
+  enable_security_hub = var.enable_security_hub
+  monthly_budget_usd  = var.monthly_budget_usd
+  tags                = local.tags
 }
 
 output "permission_set_arns" {
