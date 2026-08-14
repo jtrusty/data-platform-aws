@@ -26,5 +26,5 @@ redshift_log_retention_days           = 14
 audit_log_expiration_days             = 90
 monthly_budget_usd                    = 25
 athena_monthly_bytes_limit            = 214748364800
-enable_security_hub                   = true
+enable_security_hub                   = false
 guard_log_retention_days              = 14

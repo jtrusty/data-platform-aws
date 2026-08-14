@@ -16,7 +16,8 @@ This first increment establishes:
 - cost-controlled Athena workgroups and Bronze/Silver Glue Catalog databases;
 - a private, no-NAT analytics VPC and tightly capped Redshift Serverless warehouse;
 - an organization CloudTrail recording management events in every account;
-- GuardDuty, AWS Config, Security Hub, and VPC flow logs in every account;
+- GuardDuty, AWS Config, and VPC flow logs in every account, with per-check
+  Security Hub deliberately off until a measured bill justifies it;
 - a $25 monthly budget per account and an enforcing Athena monthly spend guard;
 - region and billed-resource IAM guardrails on deployment and human sessions;
 - credential-free Terraform tests for high-impact state, IAM, and S3 controls;

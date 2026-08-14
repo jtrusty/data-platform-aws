@@ -11,3 +11,9 @@ variable "monthly_budget_usd" {
   type        = number
   default     = 25
 }
+
+variable "enable_security_hub" {
+  description = "Enable Security Hub in the management account. Off until a measured bill justifies the per-check charge."
+  type        = bool
+  default     = false
+}

@@ -214,9 +214,9 @@ variable "athena_monthly_bytes_limit" {
 }
 
 variable "enable_security_hub" {
-  description = "Enable Security Hub and the foundational standard. This is the most expensive detective control, billed per check."
+  description = "Enable Security Hub and the foundational standard. Off until a measured bill justifies the per-check charge; GuardDuty, Config, and flow logs stay on regardless."
   type        = bool
-  default     = true
+  default     = false
 }
 
 variable "audit_log_expiration_days" {
