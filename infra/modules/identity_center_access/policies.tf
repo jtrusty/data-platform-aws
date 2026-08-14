@@ -40,7 +40,7 @@ locals {
     "athena:List*",
     "cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*", "cloudwatch:PutMetricData",
     "dynamodb:List*",
-    "glue:List*",
+    "glue:Describe*", "glue:List*",
     "lambda:List*",
     "logs:Describe*", "logs:List*",
     "redshift-serverless:List*",
