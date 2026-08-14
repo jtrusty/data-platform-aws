@@ -369,10 +369,14 @@ resource "aws_iam_role_policy" "terraform_plan" {
         Sid    = "ReadPlatform"
         Effect = "Allow"
         Action = [
-          "athena:List*", "cloudwatch:Get*", "cloudwatch:List*", "dynamodb:List*",
-          "ec2:Describe*", "glue:List*", "iam:List*", "kms:Describe*", "kms:List*",
+          "athena:List*", "budgets:Describe*", "budgets:View*",
+          "cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*",
+          "config:Describe*", "config:Get*", "dynamodb:List*",
+          "ec2:Describe*", "glue:List*", "guardduty:Get*", "guardduty:List*",
+          "iam:List*", "kms:Describe*", "kms:List*",
           "lambda:List*", "logs:Describe*", "logs:List*", "redshift-serverless:List*",
-          "secretsmanager:ListSecrets", "sqs:List*", "states:List*",
+          "secretsmanager:ListSecrets", "securityhub:Describe*", "securityhub:Get*",
+          "sns:Get*", "sns:List*", "sqs:List*", "states:List*",
         ]
         Resource = "*"
       },
@@ -441,17 +445,9 @@ resource "aws_iam_role_policy" "terraform_plan" {
         Resource = "*"
       },
       {
-        Sid    = "ReadPlatformBuckets"
-        Effect = "Allow"
-        Action = [
-          "s3:GetBucketAcl", "s3:GetBucketCORS", "s3:GetBucketLocation", "s3:GetBucketLogging",
-          "s3:GetBucketNotification", "s3:GetBucketObjectLockConfiguration",
-          "s3:GetBucketOwnershipControls", "s3:GetBucketPolicy", "s3:GetBucketPolicyStatus",
-          "s3:GetBucketPublicAccessBlock", "s3:GetBucketRequestPayment", "s3:GetBucketTagging",
-          "s3:GetBucketVersioning", "s3:GetBucketWebsite", "s3:GetEncryptionConfiguration",
-          "s3:GetLifecycleConfiguration", "s3:GetReplicationConfiguration",
-          "s3:ListBucket", "s3:ListBucketVersions",
-        ]
+        Sid      = "ReadPlatformBuckets"
+        Effect   = "Allow"
+        Action   = ["s3:Get*", "s3:List*"]
         Resource = ["arn:aws:s3:::${local.role_prefix}-*"]
       },
     ]

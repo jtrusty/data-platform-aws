@@ -48,6 +48,11 @@ run "production_plan_role_is_read_only" {
   }
 
   assert {
+    condition     = length(replace(aws_iam_role_policy.terraform_plan.policy, " ", "")) <= 10240
+    error_message = "Inline role policies must fit the 10,240-character IAM quota."
+  }
+
+  assert {
     condition = alltrue([
       strcontains(aws_iam_role_policy.terraform_plan.policy, "terraform.tfstate.tflock"),
       strcontains(aws_iam_role_policy.terraform_plan.policy, "kms:GenerateDataKey"),
