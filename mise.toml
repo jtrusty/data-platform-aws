@@ -7,11 +7,6 @@ terraform-docs = "0.20.0"
 tflint = "0.64.0"
 trivy = "0.73.0"
 
-[env]
-# Every root and module initializes separately; without a shared cache each one
-# downloads the AWS provider again.
-TF_PLUGIN_CACHE_DIR = "{{config_root}}/.terraform-plugin-cache"
-
 [tasks.fmt]
 description = "Format Terraform files"
 run = "terraform fmt -recursive"
@@ -24,6 +19,10 @@ run = "terraform fmt -check -recursive"
 description = "Initialize and validate each Terraform root and module"
 run = '''
 set -eu
+# Every root and module initializes separately; without a shared cache each one
+# downloads the AWS provider again. Scoped to this task so a workflow calling
+# terraform directly never inherits a cache path that does not exist.
+export TF_PLUGIN_CACHE_DIR="$PWD/.terraform-plugin-cache"
 mkdir -p "$TF_PLUGIN_CACHE_DIR"
 rg --files infra -g 'versions.tf' | sed 's#/versions.tf$##' | sort -u | while read -r directory; do
   TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" init -backend=false -input=false
@@ -35,6 +34,10 @@ done
 description = "Run Terraform tests"
 run = '''
 set -eu
+# Every root and module initializes separately; without a shared cache each one
+# downloads the AWS provider again. Scoped to this task so a workflow calling
+# terraform directly never inherits a cache path that does not exist.
+export TF_PLUGIN_CACHE_DIR="$PWD/.terraform-plugin-cache"
 mkdir -p "$TF_PLUGIN_CACHE_DIR"
 rg --files infra -g '*.tftest.hcl' | sed 's#/tests/.*##' | sort -u | while read -r directory; do
   TF_DATA_DIR="$PWD/$directory/.terraform-ci" terraform -chdir="$directory" init -backend=false -input=false

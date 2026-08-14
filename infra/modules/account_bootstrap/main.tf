@@ -369,7 +369,7 @@ resource "aws_iam_role_policy" "terraform_plan" {
         Sid    = "ReadPlatform"
         Effect = "Allow"
         Action = [
-          "athena:List*", "budgets:Describe*", "budgets:View*",
+          "athena:List*", "budgets:Describe*", "budgets:List*", "budgets:View*",
           "cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*",
           "config:Describe*", "config:Get*", "dynamodb:List*",
           "ec2:Describe*", "glue:List*", "guardduty:Get*", "guardduty:List*",
