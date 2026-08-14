@@ -247,10 +247,19 @@ data events are off by default because they bill per event; the module accepts
 Terraform state bucket ARNs when an investigation needs object-level state
 access history.
 
-Detective controls that bill while idle -- GuardDuty, AWS Config, VPC flow
-logs, and CloudWatch alarms -- are deliberately not enabled at this stage. The
-trail is the account-level record; workload-level detection is a later,
-explicitly cost-reviewed decision.
+GuardDuty, AWS Config, Security Hub, and VPC flow logs are enabled in every
+account. Config records an explicit resource-type list rather than all supported
+types, flow logs deliver to S3 rather than per-GB CloudWatch Logs ingestion, and
+only the Foundational Security Best Practices standard is subscribed. Security
+Hub is billed per check and is the most expensive of these, so each environment
+can disable it independently.
+
+Budget and alarm notifications publish to a per-account SNS topic that only
+same-account Budgets and CloudWatch may write to, and never without TLS. The
+subscribed address is supplied through a gitignored tfvars file locally and a
+GitHub Environment secret in CI; it is marked sensitive so it is redacted from
+plans printed into public workflow logs, and CI fails if an address is ever
+committed to a tracked file.
 
 ## Region and billed-resource guardrails
 

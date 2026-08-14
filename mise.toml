@@ -100,6 +100,7 @@ rg -F 'scripts/enforce-log-retention.sh sandbox' "$deployment_workflow"
 rg -F 'scripts/enforce-log-retention.sh development' "$deployment_workflow"
 rg -F 'scripts/enforce-log-retention.sh production' "$deployment_workflow"
 rg -F 'REVIEWED_FINGERPRINT' "$deployment_workflow"
+rg -F 'TF_VAR_alert_email' "$deployment_workflow"
 rg -F 'detailed-exitcode' "$drift_workflow"
 rg 'environment: .*matrix\.environment.*-plan' "$drift_workflow"
 
@@ -130,6 +131,27 @@ rg -F 'enable_log_file_validation    = true' "$audit_module/main.tf"
 rg -F 'sse_algorithm = "AES256"' "$audit_module/main.tf"
 if rg -F 'aws_cloudwatch_log_group' "$audit_module/main.tf"; then
   echo "CloudTrail must not stream to CloudWatch Logs, which bills per ingested GB" >&2
+  exit 1
+fi
+
+# Spend controls must stay wired: a budget alert plus an enforcing Athena guard.
+observability="infra/modules/platform_observability/main.tf"
+rg -F 'resource "aws_budgets_budget" "account"' "$observability"
+rg -F 'resource "aws_lambda_function" "athena_spend_guard"' "$observability"
+rg -F 'kms_master_key_id = "alias/aws/sns"' "$observability"
+detection="infra/modules/platform_detection/main.tf"
+rg -F 'all_supported                 = false' "$detection"
+rg -F 'log_destination_type     = "s3"' "$detection"
+if rg -F 'aws_securityhub_standards_subscription" "cis' "$detection"; then
+  echo "a second Security Hub standard doubles per-check charges and needs a cost review" >&2
+  exit 1
+fi
+
+# A real alert address must never be committed to this public repository. Only
+# tracked files are scanned; local alert tfvars are gitignored by design.
+if git ls-files -z -- 'infra' '.github' | xargs -0 rg -o '[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}' \
+  | rg -v 'example\.com|amazonaws\.com|githubusercontent\.com'; then
+  echo "alert addresses must stay in gitignored tfvars and GitHub Environment secrets" >&2
   exit 1
 fi
 

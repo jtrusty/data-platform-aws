@@ -106,6 +106,30 @@ resource "aws_s3_bucket_policy" "this" {
           }
         }
       }],
+      [
+        for delivery in(var.log_delivery == null ? [] : [var.log_delivery]) : {
+          Sid       = "AllowLogDeliveryAclCheck"
+          Effect    = "Allow"
+          Principal = { Service = delivery.service_principal }
+          Action    = ["s3:GetBucketAcl", "s3:ListBucket"]
+          Resource  = "arn:aws:s3:::${var.bucket_name}"
+          Condition = {
+            StringEquals = { "aws:SourceAccount" = delivery.account_id }
+          }
+        }
+      ],
+      [
+        for delivery in(var.log_delivery == null ? [] : [var.log_delivery]) : {
+          Sid       = "AllowLogDeliveryWrite"
+          Effect    = "Allow"
+          Principal = { Service = delivery.service_principal }
+          Action    = "s3:PutObject"
+          Resource  = "arn:aws:s3:::${var.bucket_name}/${delivery.prefix}*"
+          Condition = {
+            StringEquals = { "aws:SourceAccount" = delivery.account_id }
+          }
+        }
+      ],
       var.kms_key_arn == null ? [] : [
         {
           Sid       = "DenyExplicitMissingKmsKey"

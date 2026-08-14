@@ -28,6 +28,16 @@ output "dead_letter_queue_arns" {
   value       = local.dead_letter_queue_arns
 }
 
+output "athena_guard_role_arn" {
+  description = "Execution role for the Athena monthly spend guard."
+  value       = aws_iam_role.athena_guard.arn
+}
+
+output "dead_letter_queue_names" {
+  description = "Dead-letter queue names for alarm wiring."
+  value       = { for name, queue in aws_sqs_queue.dead_letter : name => queue.name }
+}
+
 output "metadata_table_name" {
   description = "Platform metadata and watermark table name."
   value       = aws_dynamodb_table.metadata.name

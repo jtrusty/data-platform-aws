@@ -128,6 +128,64 @@ References:
 - [Enhanced VPC Routing](https://docs.aws.amazon.com/redshift/latest/mgmt/enhanced-vpc-enabling-cluster.html)
 - [Data API VPC endpoints](https://docs.aws.amazon.com/redshift/latest/mgmt/data-api-vpc-endpoint.html)
 
+## Spend controls
+
+Every account carries a $25 monthly cost budget with actual notifications at
+50%, 80%, and 100% plus a forecast notification, so four accounts bound the
+platform at $100/month of *alerting*. AWS Budgets only notifies: cost data lags
+several hours and Budgets cannot stop spend without a budget action, which was
+deliberately not enabled so an incident response cannot be locked out by its own
+cost control.
+
+Athena is the one service with no natural ceiling. Its per-query cutoff limits a
+single query to 10 GiB, but nothing limits query volume, so an enforcing control
+was added:
+
+```text
+Athena ProcessedBytes (daily)
+      |
+CloudWatch alarm at monthly allowance / 30
+      |
+   SNS alert topic ---> email
+      |
+   Lambda spend guard
+      |
+sums month-to-date ProcessedBytes
+      |
+ disables the workgroup once the monthly limit is reached
+```
+
+CloudWatch alarms cannot sum a calendar month, so the alarm fires on a daily
+share and the guard function makes the monthly decision itself. Re-enabling a
+disabled workgroup is a deliberate Terraform or console action. The monthly
+limits are 100 GiB in sandbox, 200 GiB in development, and 500 GiB in
+production: about $0.50, $1, and $2.50 of scan at $5/TB.
+
+| Control | Enforcing? | Reaction time |
+| --- | --- | --- |
+| Athena per-query cutoff | Yes | Immediate, per query |
+| Athena monthly guard | Yes, disables the workgroup | Minutes |
+| Redshift usage limit | Yes, deactivates the workgroup | Minutes |
+| Account budget | No, notification only | Hours |
+
+## Detective controls
+
+| Control | Idle cost | Cost shape |
+| --- | ---: | --- |
+| GuardDuty, 4 accounts | ~$0.25/mo | Per million analyzed CloudTrail events |
+| VPC flow logs to S3 | ~$0.05/mo | Per GB stored; a no-NAT VPC produces very little |
+| AWS Config | ~$1-3/mo | Per configuration item and rule evaluation; recording is limited to an explicit resource-type list rather than all supported types |
+| Security Hub, 4 accounts | ~$8-24/mo | **Per control check.** The most expensive control here |
+
+Security Hub is billed per security check, and the Foundational Security Best
+Practices standard runs a few hundred controls per account. Only that one
+standard is enabled; adding CIS would roughly double the charge for largely
+overlapping findings. Each environment can set `enable_security_hub = false`
+independently if the measured charge is not worth it.
+
+Flow logs are delivered to S3 rather than CloudWatch Logs because log ingestion
+is billed per GB while S3 storage is not.
+
 ## Guardrails that keep an idle platform idle
 
 Cost control is enforced in IAM, not only in review. Both the deployment role

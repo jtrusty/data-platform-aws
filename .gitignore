@@ -27,3 +27,4 @@ infra/bootstrap/*/backend.tf
 .idea/
 .vscode/
 .DS_Store
+*.zip

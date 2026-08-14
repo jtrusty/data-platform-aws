@@ -192,3 +192,41 @@ variable "redshift_log_retention_days" {
   type        = number
   default     = 30
 }
+
+variable "alert_email" {
+  description = "Address subscribed to budget and platform alarms. Supplied through a gitignored tfvars file locally and a GitHub Environment secret in CI; never committed."
+  type        = string
+  default     = null
+  nullable    = true
+  sensitive   = true
+}
+
+variable "monthly_budget_usd" {
+  description = "Monthly cost budget for this account."
+  type        = number
+  default     = 25
+}
+
+variable "athena_monthly_bytes_limit" {
+  description = "Month-to-date Athena scanned bytes after which the workgroup is disabled."
+  type        = number
+  default     = 536870912000
+}
+
+variable "enable_security_hub" {
+  description = "Enable Security Hub and the foundational standard. This is the most expensive detective control, billed per check."
+  type        = bool
+  default     = true
+}
+
+variable "audit_log_expiration_days" {
+  description = "Days to retain AWS Config snapshots and VPC flow log records."
+  type        = number
+  default     = 365
+}
+
+variable "guard_log_retention_days" {
+  description = "CloudWatch retention for the Athena spend guard's own logs."
+  type        = number
+  default     = 14
+}

@@ -86,6 +86,12 @@ variable "manage_redshift_service_linked_role" {
   default     = true
 }
 
+variable "manage_detective_service_linked_roles" {
+  description = "Create the account-wide AWS Config, GuardDuty, and Security Hub service-linked roles. Set to false for an account where they already exist."
+  type        = bool
+  default     = true
+}
+
 variable "tags" {
   description = "Mandatory bootstrap ownership tags."
   type        = map(string)

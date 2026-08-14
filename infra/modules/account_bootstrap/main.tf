@@ -54,6 +54,18 @@ resource "aws_iam_service_linked_role" "redshift" {
   }
 }
 
+# The detective services each require an account-wide service-linked role that
+# the narrowly scoped deployment role must not be able to create for itself.
+resource "aws_iam_service_linked_role" "detection" {
+  for_each = var.manage_detective_service_linked_roles ? toset(["config.amazonaws.com", "guardduty.amazonaws.com", "securityhub.amazonaws.com"]) : toset([])
+
+  aws_service_name = each.value
+
+  lifecycle {
+    prevent_destroy = true
+  }
+}
+
 resource "aws_iam_openid_connect_provider" "github" {
   url            = "https://token.actions.githubusercontent.com"
   client_id_list = ["sts.amazonaws.com"]
@@ -177,6 +189,18 @@ resource "aws_iam_policy" "runtime_boundary" {
             "aws:ResourceTag/Environment" = var.environment
           }
         }
+      },
+      {
+        Sid      = "ReadPlatformSpendMetrics"
+        Effect   = "Allow"
+        Action   = ["cloudwatch:GetMetricData", "cloudwatch:GetMetricStatistics"]
+        Resource = "*"
+      },
+      {
+        Sid      = "GuardPlatformAthenaSpend"
+        Effect   = "Allow"
+        Action   = ["athena:UpdateWorkGroup"]
+        Resource = "arn:aws:athena:us-east-2:${var.account_id}:workgroup/${local.role_prefix}-*"
       },
       {
         Sid      = "DenyTerraformStateData"
