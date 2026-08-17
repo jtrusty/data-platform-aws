@@ -62,6 +62,16 @@ jobs:
         run: |
           root="infra/environments/${ENVIRONMENT}"
           terraform -chdir="$root" init -input=false -backend-config=backend.hcl
+
+          # An environment that has never been applied plans as one large
+          # creation, which is not drift. Production stays undeployed until a
+          # release tag, so drift detection starts covering it on its first
+          # apply rather than reporting the whole configuration every night.
+          if [ "$(terraform -chdir="$root" state list | wc -l)" -eq 0 ]; then
+            echo "::notice::${ENVIRONMENT} has never been deployed; skipping drift detection."
+            exit 0
+          fi
+
           set +e
           terraform -chdir="$root" plan -input=false -lock=false -detailed-exitcode -no-color
           exit_code=$?
