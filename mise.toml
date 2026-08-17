@@ -105,6 +105,7 @@ rg -F 'scripts/enforce-log-retention.sh production' "$deployment_workflow"
 rg -F 'REVIEWED_FINGERPRINT' "$deployment_workflow"
 rg -F 'TF_VAR_alert_email' "$deployment_workflow"
 rg -F 'detailed-exitcode' "$drift_workflow"
+rg -F 'has never been deployed; skipping drift detection' "$drift_workflow"
 rg 'environment: .*matrix\.environment.*-plan' "$drift_workflow"
 
 # A public repository's workflow artifacts are world-readable, so a plan file
