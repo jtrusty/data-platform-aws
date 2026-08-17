@@ -299,6 +299,17 @@ them, so the boundary is drawn with denies instead:
 | Durability and retention | Whether data survives: bucket creation and deletion, object version deletion, versioning, encryption configuration, lifecycle rules, and CloudWatch retention removal |
 | Cost controls | The caps themselves: Athena workgroup creation and update, Glue development endpoints, Lambda provisioned concurrency |
 
+Glue is a deliberate exception to the environment-prefix boundary. Its actions
+are inconsistent about resource-level permissions: many, including the Glue
+Studio authoring helpers, accept no resource at all, so a prefixed grant can
+never match them. AWS reached the same conclusion in its own
+`AWSGlueConsoleFullAccess` managed policy, which grants `glue:*` on `*`.
+Engineers therefore hold `glue:*` account-wide, still bounded by the Region
+deny, the catalog security denies, the development-endpoint cost deny, and the
+resource-scoped protection of the Terraform-owned Bronze and Silver databases.
+The accepted tradeoff is that a Glue job, crawler, or database can be created
+outside the `data-platform-{environment}-*` naming convention.
+
 Bucket creation is denied so every bucket carries the module's encryption,
 versioning, lifecycle, and public-access controls. Object deletion is allowed
 but version deletion is not, so a mistaken delete leaves a recoverable version.
