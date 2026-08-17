@@ -212,6 +212,28 @@ run "security_boundary_stays_with_terraform" {
 # Terraform owns bucket creation and the cost caps. An engineer-made Athena
 # workgroup would carry no per-query scan cutoff and would be invisible to the
 # monthly spend guard.
+# Platform tags are what several conditions in this policy match on, so the
+# ability to set them is the ability to grant access.
+run "engineers_cannot_retag_resources" {
+  command = plan
+
+  assert {
+    condition = alltrue(flatten([
+      for policy in [
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy),
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy),
+        ] : [
+        for statement in policy.Statement :
+        statement.Effect != "Allow" || !anytrue([
+          for action in try(tolist(statement.Action), [statement.Action]) :
+          action == "ec2:CreateTags" || action == "ec2:DeleteTags" || action == "ec2:*"
+        ])
+      ]
+    ]))
+    error_message = "Tagging EC2 resources would let an engineer satisfy the platform tag conditions this policy relies on."
+  }
+}
+
 run "cost_and_creation_controls_stay_with_terraform" {
   command = plan
 
