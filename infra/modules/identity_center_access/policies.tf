@@ -40,7 +40,11 @@ locals {
     "athena:List*",
     "cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*", "cloudwatch:PutMetricData",
     "dynamodb:List*",
-    "glue:Describe*", "glue:List*",
+    # Glue Studio's authoring helpers take no resource, so they can only be
+    # granted at "*". They generate scripts, plans, and mappings and read no
+    # platform data of their own.
+    "glue:CreateScript", "glue:Describe*", "glue:GetCrawlerMetrics",
+    "glue:GetDataflowGraph", "glue:GetMapping", "glue:GetPlan", "glue:List*",
     "lambda:List*",
     "logs:Describe*", "logs:List*",
     "redshift-serverless:List*",
