@@ -36,10 +36,28 @@ locals {
     "arn:aws:iam::${local.production_environment.account_id}:role/data-platform/runtime/${local.production_environment.prefix}-redshift",
   ]
 
+  # The Glue console enumerates candidate sources, VPC networking, KMS aliases,
+  # and job roles before it will let anyone build a connection or a job. These
+  # mirror the read-only half of the AWS-managed AWSGlueConsoleFullAccess policy.
+  #
+  # Deliberately not adopted from that policy: ec2:CreateTags and ec2:DeleteTags,
+  # because platform tags are what several conditions in this very policy match
+  # on, so tag control is privilege control; ec2:RunInstances and
+  # ec2:TerminateInstances and cloudformation stack mutation, because they create
+  # billed resources; and s3:CreateBucket, which Terraform owns.
   data_engineer_discovery_actions = [
     "athena:List*",
     "cloudwatch:Describe*", "cloudwatch:Get*", "cloudwatch:List*", "cloudwatch:PutMetricData",
+    "docdb-elastic:List*",
     "dynamodb:List*",
+    "ec2:Describe*",
+    "iam:GetRole", "iam:GetRolePolicy", "iam:ListAttachedRolePolicies", "iam:ListRolePolicies", "iam:ListRoles",
+    "kms:ListAliases",
+    "rds:Describe*",
+    "redshift:Describe*",
+    "s3:ListAllMyBuckets",
+    "secretsmanager:ListSecrets",
+    "tag:GetResources",
     # Glue's resource model is inconsistent: many actions, including the Studio
     # authoring helpers, take no resource and can only be granted at "*". AWS
     # reached the same conclusion in AWSGlueConsoleFullAccess, which grants
