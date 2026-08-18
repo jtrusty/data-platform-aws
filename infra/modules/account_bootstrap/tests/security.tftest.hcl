@@ -67,9 +67,39 @@ run "exact_github_trust" {
     error_message = "Platform S3 and secrets access must be namespace-scoped and must not include protected state."
   }
 
+  # Asserting that the string appears somewhere proves nothing about pairing.
+  # Each runtime role must reach only the services that trust it, and the
+  # deployment role must never be able to pass an administrator, bootstrap, or
+  # Identity Center role to anything.
   assert {
-    condition     = strcontains(local.terraform_deployment_policy, "iam:PassedToService")
-    error_message = "PassRole must be conditioned on the target AWS service."
+    condition = alltrue(flatten([
+      for statement in jsondecode(local.terraform_deployment_policy).Statement : [
+        for resource in try(tolist(statement.Resource), [statement.Resource]) :
+        toset(try(tolist(statement.Condition.StringEquals["iam:PassedToService"]), [statement.Condition.StringEquals["iam:PassedToService"]])) == (
+          endswith(resource, "-ingest") || endswith(resource, "-transform")
+          ? toset(["glue.amazonaws.com", "lambda.amazonaws.com"])
+          : endswith(resource, "-orchestration") ? toset(["states.amazonaws.com"])
+          : endswith(resource, "-redshift") ? toset(["redshift-serverless.amazonaws.com"])
+          : endswith(resource, "-athena-guard") ? toset(["lambda.amazonaws.com"])
+          : endswith(resource, "AWSServiceRoleForConfig") ? toset(["config.amazonaws.com"])
+          : toset([])
+        )
+      ] if contains(try(tolist(statement.Action), [statement.Action]), "iam:PassRole")
+    ]))
+    error_message = "Each role the deployment identity can pass must be paired with only the services that trust it."
+  }
+
+  assert {
+    condition = alltrue(flatten([
+      for statement in jsondecode(local.terraform_deployment_policy).Statement : [
+        for resource in try(tolist(statement.Resource), [statement.Resource]) :
+        !anytrue([
+          for forbidden in ["PlatformAdmin", "OrganizationAdmin", "AWSReservedSSO", "terraform-deploy", "terraform-plan"] :
+          strcontains(resource, forbidden)
+        ])
+      ] if contains(try(tolist(statement.Action), [statement.Action]), "iam:PassRole")
+    ]))
+    error_message = "The deployment role must never be able to pass an administrator, Identity Center, or Terraform role."
   }
 
   assert {
