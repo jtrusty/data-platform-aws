@@ -253,3 +253,53 @@ run "cost_and_creation_controls_stay_with_terraform" {
     error_message = "Bucket creation, version deletion, cross-account log delivery, table replicas, and uncapped Athena workgroups must all stay denied."
   }
 }
+
+# The existing assertions prove that PassRole targets are runtime roles and are
+# always service-conditioned. Neither proves the pairing: adding
+# ec2.amazonaws.com to the ingest statement, or glue.amazonaws.com to the
+# Redshift statement, would satisfy both and still hand a role to a service that
+# was never meant to assume it.
+run "passrole_pairs_each_role_with_only_its_own_services" {
+  command = plan
+
+  assert {
+    condition = alltrue(flatten([
+      for policy in [
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy),
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy),
+        ] : [
+        for statement in policy.Statement : [
+          for resource in try(tolist(statement.Resource), [statement.Resource]) :
+          toset(try(tolist(statement.Condition.StringEquals["iam:PassedToService"]), [statement.Condition.StringEquals["iam:PassedToService"]])) == (
+            endswith(resource, "-ingest") || endswith(resource, "-transform")
+            ? toset(["glue.amazonaws.com", "lambda.amazonaws.com"])
+            : endswith(resource, "-orchestration") ? toset(["states.amazonaws.com"])
+            : endswith(resource, "-redshift") ? toset(["redshift-serverless.amazonaws.com"])
+            : toset([])
+          )
+        ] if contains(try(tolist(statement.Action), [statement.Action]), "iam:PassRole")
+      ]
+    ]))
+    error_message = "Each runtime role may be passed only to the services it trusts: ingest and transform to Glue and Lambda, orchestration to Step Functions, Redshift to Redshift Serverless."
+  }
+
+  # PlatformAdmin, the deployment role, and the plan role are the three
+  # identities that would escalate outright.
+  assert {
+    condition = alltrue(flatten([
+      for policy in [
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_nonprod.inline_policy),
+        jsondecode(aws_ssoadmin_permission_set_inline_policy.data_engineer_production.inline_policy),
+        ] : [
+        for statement in policy.Statement : [
+          for resource in try(tolist(statement.Resource), [statement.Resource]) :
+          statement.Effect != "Allow" || !anytrue([
+            for forbidden in ["PlatformAdmin", "OrganizationAdmin", "terraform-deploy", "terraform-plan", ":role/aws-service-role/", ":role/bootstrap/"] :
+            strcontains(resource, forbidden)
+          ])
+        ]
+      ]
+    ]))
+    error_message = "No engineer statement may name an administrator, bootstrap, or service-linked role."
+  }
+}
