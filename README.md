@@ -36,6 +36,16 @@ record in [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) and the capacity, retention,
 Free Tier, Athena, and Redshift choices in
 [docs/COSTS.md](docs/COSTS.md).
 
+## Documentation
+
+| Document | What it covers |
+| --- | --- |
+| [docs/ONBOARDING.md](docs/ONBOARDING.md) | First day, how to make a change, what to do when something is denied |
+| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | How the platform is structured and why |
+| [SECURITY.md](SECURITY.md) | Trust model, boundaries, and accepted tradeoffs |
+| [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md) | Administrator runbook and deployment record |
+| [docs/COSTS.md](docs/COSTS.md) | Cost model, spend controls, and retention |
+
 ## Local setup
 
 Install [mise](https://mise.jdx.dev/), then run:
