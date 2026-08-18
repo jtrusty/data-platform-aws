@@ -1,12 +1,10 @@
 name: Deploy platform
 
 on:
+  # Every pull request runs the quality gate, because it is the required status
+  # check on main. A path filter here leaves a documentation-only pull request
+  # with no run at all, and therefore permanently unmergeable.
   pull_request:
-    paths:
-      - ".github/workflows/deploy.yml"
-      - "infra/**"
-      - "scripts/**"
-      - "mise.toml"
   push:
     branches:
       - main
