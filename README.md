@@ -1,5 +1,16 @@
 # AWS Data Platform
 
+> **Status: torn down.** The four AWS accounts this platform ran in were closed
+> on 2026-08-19 after the proof of concept completed. The configuration here is
+> complete and was deployed and verified in AWS; it is kept as a reference and
+> as the starting point for a rebuild.
+>
+> Reviving it requires new accounts and a fresh bootstrap: create the accounts,
+> enable IAM Identity Center, update the identifiers in the `accounts.auto.tfvars`
+> files, then follow [docs/BOOTSTRAP.md](docs/BOOTSTRAP.md). The deployment and
+> drift workflows are disabled, and the required status check has been removed
+> from `main`, so re-enable both before deploying again.
+
 Terraform foundation for a small-team AWS data platform. The design protects
 account-level privilege boundaries while giving data engineers broad freedom
 inside resources named and tagged for the platform.
